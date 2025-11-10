@@ -157,13 +157,14 @@ yq --version 2>&1 | grep -q "version 4" && echo "✓ yq v4.x" || echo "⚠ yq v4
 | Input Validation (Basic) | Invalid values, edge cases | 12 |
 | **Input Validation (Extended)** 🆕 | **Numeric/path/enum option validation** | **25** |
 | **Destructive Operations** 🆕 | **Confirmation prompts, --yes/--force flags** | **16** |
+| **Directory Traversal Limits** 🆕 | **Large file count, deep nesting, symlink loops** | **12** |
 | Output Validation | Format, color output | 8 |
 | Environment Dependencies | OS, environment variables | 10 |
 | Performance | Startup time, memory usage | 6 |
 | Documentation Consistency | README vs help | 5 |
 | **Reports** | **4 formats (Markdown/JSON/HTML/JUnit)** | - |
 
-**Total**: Approximately 140-160 test cases (41 test cases added in Phase 2.5)
+**Total**: Approximately 152-172 test cases (41 in Phase 2.5, 12 in Phase 2.6)
 
 ---
 

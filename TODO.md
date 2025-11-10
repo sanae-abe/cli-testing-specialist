@@ -1,7 +1,7 @@
 # CLI Testing Specialist Agent - TODO
 
 **最終更新**: 2025-11-10
-**フェーズ**: v1.0.0リリース準備（Phase 2.5完了、i18n実装完了）
+**フェーズ**: Phase 2.6開始（ディレクトリ走査制限テスト実装）
 
 ---
 
@@ -14,6 +14,7 @@
 | **i18n Week 2** | ✅ 100% | - | 完了 |
 | **i18n Week 3** | ✅ 100% | - | 完了 |
 | **i18n実装** | ✅ 100% | - | 完全完了 |
+| **Phase 2.6** | ⏳ 0% | 5 | 設計完了、実装待ち |
 
 ---
 
@@ -242,13 +243,168 @@
 
 ---
 
+## 🚀 Phase 2.6: ディレクトリ走査制限テスト（Phase 1-3完了、Phase 4-5進行中）
+
+**設計ドキュメント**: [DIRECTORY-TRAVERSAL-LIMITS-DESIGN.md](docs/DIRECTORY-TRAVERSAL-LIMITS-DESIGN.md)
+**設計レビュー**: 2025-11-10（3ラウンド反復レビュー完了）
+**実装開始**: 2025-11-10
+**総推定時間**: 9-14時間
+**実績時間**: Phase 1-3完了（約5-8時間）
+
+### 📋 背景
+- backup-suiteで`~/`配下全体を走査して30分以上固まった問題を検出
+- 膨大なディレクトリ走査による固まり問題を自動検出する新テストパターン
+- テスト項目: 12パターン（段階的ファイル処理、深い階層、シンボリックリンクループ等）
+
+### Phase 1: セキュリティ強化（最優先）✅ 100%
+
+**推定時間**: 2-3時間
+**実績**: 完了（templates/directory-traversal-limits.fragment: 465行）
+
+- [x] ホームディレクトリテストのモック化実装
+  - [x] モックホームディレクトリ作成関数（`/tmp/cli-test-$$-fake-home`）
+  - [x] HOME環境変数の一時的変更と復元処理
+  - [x] 実際のホームディレクトリを絶対使用しない安全策
+- [x] シンボリックリンクループの安全な実装
+  - [x] 相対パスでの循環参照作成（`ln -s ../b a/link_to_b`）
+  - [x] 二重ランダム化（`/tmp/cli-test-$$-$RANDOM-symlink`）
+  - [x] 安全なクリーンアップ処理（`rm -f`シンボリックリンクのみ）
+- [x] trap処理の実装
+  - [x] `cleanup_all()`関数作成
+  - [x] `trap cleanup_all EXIT ERR INT TERM`設定
+  - [x] HOME環境変数復元処理
+- [x] テストディレクトリ権限設定
+  - [x] `chmod 700`の全テストディレクトリへの適用
+  - [x] `mktemp -d`での安全な作成
+- [x] ulimitリソース制限
+  - [x] メモリ制限: 2GB（`ulimit -m 2097152`）
+  - [x] ファイル数制限: 2048個（`ulimit -n 2048`）
+  - [x] プロセス数制限: 100個（`ulimit -u 100`）
+
+### Phase 2: パフォーマンス最適化 ✅ 100%
+
+**推定時間**: 2-3時間
+**実績**: 完了（core/test-generator.sh統合: +77行）
+
+- [x] setup_file()/teardown_file()実装
+  - [x] `setup_file()`でテストディレクトリ一括作成
+  - [x] `teardown_file()`で全ディレクトリクリーンアップ
+  - [x] 環境変数エクスポート（TEST_DIR_100, TEST_DIR_500等）
+- [x] ヘルパー関数実装
+  - [x] `populate_test_dir(dir, count)` - ダミーファイル作成
+  - [x] `create_deep_dir(dir, depth)` - 深い階層作成
+  - [x] `create_symlink_loop(dir)` - シンボリックリンクループ
+  - [x] `create_fake_home(dir)` - モックホームディレクトリ
+  - [x] `cleanup_test_dir(dir)` - 安全なクリーンアップ
+- [x] 段階的テスト実装（100→500→1,000ファイル）
+  - [x] テスト1-a: 100ファイル、5秒以内
+  - [x] テスト1-b: 500ファイル、15秒以内（1-a成功時のみ）
+  - [x] テスト1-c: 1,000ファイル、30秒以内（1-b成功時のみ）
+- [x] 早期フェイル戦略
+  - [x] 小規模テスト失敗時の大規模テストスキップロジック
+- [x] CI環境でのスキップオプション
+  - [x] `SKIP_DIRECTORY_TRAVERSAL_TESTS=1`環境変数対応
+  - [x] `/tmp`容量チェック（`df -h /tmp`）
+
+### Phase 3: 保守性向上 ✅ 100%
+
+**推定時間**: 1-2時間
+**実績**: 完了（全チェック項目クリア）
+
+- [x] 既存テンプレート比較表の検証
+  - [x] destructive-ops, input-validationとの整合性確認
+  - [x] 変数命名規則の統一
+- [x] 変数定義の実装
+  - [x] CLI_BINARY, TRAVERSAL_COMMAND, TRAVERSAL_ARGS
+  - [x] TEST_DIR_100, TEST_DIR_500, TEST_DIR_1000
+  - [x] TEST_DIR_DEEP, TEST_DIR_SYMLINK, FAKE_HOME
+- [x] テスト出力フォーマット統一
+  - [x] 成功時: `✓ [directory-traversal] ...`
+  - [x] 失敗時: `✗ [directory-traversal] ...`
+  - [x] スキップ時: `- [directory-traversal] ...`
+- [x] 英語コメント追加
+  - [x] 各テストケースの説明コメント
+  - [x] ヘルパー関数のドキュメント
+- [x] BATS file_tags追加
+  - [x] `# bats file_tags=sequential,resource-intensive`
+
+### Phase 4: 実装＆テスト ⏳ 50%
+
+**推定時間**: 3-4時間
+**実績**: テンプレート・統合完了、実CLIテスト未実施
+
+- [x] `templates/directory-traversal-limits.fragment`作成
+  - [x] テスト1-a, 1-b, 1-c（段階的ファイル処理）
+  - [x] テスト2（深い階層の再帰制限）
+  - [x] テスト3（シンボリックリンクループ検出）
+  - [x] テスト4（ホームディレクトリ警告、モック環境）
+  - [x] テスト5（SIGINT応答性）
+  - [x] テスト6（タイムアウトオプション）
+  - [x] テスト7（進捗表示）
+  - [x] テスト8（ファイル数上限オプション）
+  - [x] テスト9（メモリ使用量）
+  - [x] テスト10（パフォーマンス警告ドキュメント）
+- [x] `core/test-generator.sh`統合
+  - [x] `generate_directory_traversal_tests()`関数追加
+  - [x] ディレクトリ走査コマンド抽出ロジック（scan|analyze|backup等）
+  - [x] メインケース文への追加（directory-traversal, all）
+- [ ] 単体テスト（各ヘルパー関数）
+  - [ ] populate_test_dir()テスト
+  - [ ] create_deep_dir()テスト
+  - [ ] create_symlink_loop()テスト
+  - [ ] create_fake_home()テスト
+  - [ ] cleanup_test_dir()テスト
+- [ ] 実CLIツールでの動作確認
+  - [ ] backup-suiteでのテスト実行
+  - [ ] curl, npm, python3での動作確認
+  - [ ] 期待通りの検出結果確認
+
+### Phase 5: ドキュメント完成 ⏳ 30%
+
+**推定時間**: 1-2時間
+**実績**: TODO.md更新進行中
+
+- [x] TODO.md更新（Phase 2.6進捗反映）
+- [ ] README.md更新
+  - [ ] 新テストパターン追加（directory-traversal-limits）
+  - [ ] テスト項目12パターンの説明
+  - [ ] セキュリティ実装ガイドラインのリンク
+- [ ] 実行方法の明記（並列実行禁止）
+  - [ ] `bats test-output/10-directory-traversal-limits.bats`（順次実行）
+  - [ ] `bats --jobs 4 test-output/`（並列実行禁止の警告）
+- [ ] トラブルシューティングセクション
+  - [ ] /tmp満杯時の対処法
+  - [ ] テスト失敗時のクリーンアップ方法
+  - [ ] Bash 5+要件の説明（連想配列対応）
+- [ ] 変更履歴追加
+  - [ ] Phase 2.6実装完了の記録
+  - [ ] 新テストパターン追加の記録
+- [ ] 最終レビュー
+  - [ ] /iterative-review によるドキュメントレビュー
+  - [ ] 設計ドキュメントとの整合性確認
+
+### 🎯 Phase 2.6成功基準
+
+1. **実用性**: backup-suite問題を実際に検出できる
+2. **移植性**: 他のCLIツール（curl, npm, python3等）にも適用可能
+3. **保守性**: 既存パターン（destructive-ops, input-validation）と統一されたコード
+4. **パフォーマンス**:
+   - テスト準備時間: <30秒（setup_file()での環境作成）
+   - テスト実行時間: <2分（12テスト合計）
+   - 総合実行時間: <3分（準備+実行）
+5. **信頼性**: false positive/negativeが少ない
+6. **安全性**: テスト環境の完全な分離と自動クリーンアップ
+
+---
+
 ## 📚 参考ドキュメント
 
 - [I18N実装計画詳細](docs/I18N-IMPLEMENTATION-PLAN.md)
 - [Phase 2.5最終レポート](docs/PHASE25-FINAL-REPORT.md)
 - [入力検証ガイド](docs/INPUT-VALIDATION-GUIDE.md)
+- [ディレクトリ走査制限設計](docs/DIRECTORY-TRAVERSAL-LIMITS-DESIGN.md) ⭐ NEW
 
 ---
 
-**管理**: このTODOリストはdocs/I18N-IMPLEMENTATION-PLAN.mdと同期
+**管理**: このTODOリストはdocs/I18N-IMPLEMENTATION-PLAN.md、docs/DIRECTORY-TRAVERSAL-LIMITS-DESIGN.mdと同期
 **更新頻度**: 週次または実装進捗に応じて

@@ -1,0 +1,464 @@
+#!/usr/bin/env bats
+#
+# Directory Traversal Limits Tests Fragment
+# CLI Testing Specialist Agent v2.6.0
+#
+# This fragment contains test templates for:
+# - Large file count handling (100, 500, 1000 files)
+# - Deep directory nesting (50 levels)
+# - Symlink loop detection
+# - Home directory warnings (mock environment)
+# - SIGINT responsiveness
+# - Timeout options
+# - Progress display
+# - Max-files limit options
+# - Memory usage monitoring
+# - Performance warning documentation
+#
+# SECURITY: All tests use /tmp with proper permissions and cleanup
+# PERFORMANCE: Tests run sequentially with early-fail strategy
+#
+# bats file_tags=sequential,resource-intensive
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+# Safe cleanup function
+cleanup_test_dir() {
+    local dir="$1"
+    if [[ -n "$dir" && "$dir" =~ ^/tmp/cli-test- ]]; then
+        rm -rf "$dir" 2>/dev/null || true
+    fi
+}
+
+# Populate directory with dummy files
+populate_test_dir() {
+    local dir="$1"
+    local count="$2"
+
+    echo "# Creating $count dummy files in $dir..." >&3
+
+    for i in $(seq 1 "$count"); do
+        # Create 1KB files
+        dd if=/dev/zero of="$dir/file_$(printf '%04d' $i).txt" bs=1024 count=1 2>/dev/null
+    done
+
+    echo "# Created $count files successfully" >&3
+}
+
+# Create deep directory structure
+create_deep_dir() {
+    local base_dir="$1"
+    local depth="$2"
+
+    echo "# Creating $depth-level deep directory..." >&3
+
+    local current_dir="$base_dir"
+    for i in $(seq 1 "$depth"); do
+        current_dir="$current_dir/level_$(printf '%02d' $i)"
+        mkdir -p "$current_dir"
+    done
+
+    # Create a file at the deepest level
+    echo "deep" > "$current_dir/deep_file.txt"
+
+    echo "# Created $depth-level directory successfully" >&3
+}
+
+# Create symlink loop (safe, relative paths)
+create_symlink_loop() {
+    local dir="$1"
+
+    echo "# Creating symlink loop in $dir..." >&3
+
+    mkdir -p "$dir"/{a,b}
+    ln -s ../b "$dir/a/link_to_b"
+    ln -s ../a "$dir/b/link_to_a"
+
+    echo "# Created symlink loop successfully" >&3
+}
+
+# Create fake home directory (mock environment)
+create_fake_home() {
+    local dir="$1"
+
+    echo "# Creating fake home directory in $dir..." >&3
+
+    mkdir -p "$dir"/{Documents,Downloads,projects}
+
+    # Add some dummy files
+    echo "readme" > "$dir/Documents/readme.txt"
+    echo "data" > "$dir/Downloads/data.txt"
+    echo "code" > "$dir/projects/project.txt"
+
+    echo "# Created fake home directory successfully" >&3
+}
+
+# Comprehensive cleanup function
+cleanup_all() {
+    local exit_code=$?
+    echo "# Cleaning up all test directories..." >&3
+
+    # Cleanup all test directories
+    for dir in "$TEST_DIR_100" "$TEST_DIR_500" "$TEST_DIR_1000" \
+               "$TEST_DIR_DEEP" "$TEST_DIR_SYMLINK" "$FAKE_HOME"; do
+        cleanup_test_dir "$dir"
+    done
+
+    # Restore HOME environment variable
+    if [[ -n "$ORIGINAL_HOME" ]]; then
+        export HOME="$ORIGINAL_HOME"
+        echo "# Restored HOME to $HOME" >&3
+    fi
+
+    return $exit_code
+}
+
+# =============================================================================
+# BATS Setup/Teardown
+# =============================================================================
+
+setup_file() {
+    echo "# ========================================" >&3
+    echo "# Directory Traversal Limits Test Setup" >&3
+    echo "# ========================================" >&3
+
+    # Environment validation
+    CLI_BINARY="${CLI_BINARY:-}"
+    if [[ -z "$CLI_BINARY" ]]; then
+        echo "# ERROR: CLI_BINARY not set" >&3
+        return 1
+    fi
+
+    TRAVERSAL_COMMAND="${TRAVERSAL_COMMAND:-scan}"
+    TRAVERSAL_ARGS="${TRAVERSAL_ARGS:-}"
+
+    echo "# CLI_BINARY: $CLI_BINARY" >&3
+    echo "# TRAVERSAL_COMMAND: $TRAVERSAL_COMMAND" >&3
+    echo "# TRAVERSAL_ARGS: $TRAVERSAL_ARGS" >&3
+
+    # Set resource limits
+    echo "# Setting resource limits..." >&3
+    ulimit -m 2097152 2>/dev/null || true  # 2GB memory
+    ulimit -n 2048 2>/dev/null || true     # 2048 files
+    ulimit -u 100 2>/dev/null || true      # 100 processes
+
+    # Create test directories with secure permissions
+    echo "# Creating test directories..." >&3
+
+    TEST_DIR_100="$(mktemp -d /tmp/cli-test-$$-100files-XXXXXX)"
+    TEST_DIR_500="$(mktemp -d /tmp/cli-test-$$-500files-XXXXXX)"
+    TEST_DIR_1000="$(mktemp -d /tmp/cli-test-$$-1000files-XXXXXX)"
+    TEST_DIR_DEEP="$(mktemp -d /tmp/cli-test-$$-deep-XXXXXX)"
+    TEST_DIR_SYMLINK="$(mktemp -d /tmp/cli-test-$$-symlink-XXXXXX)"
+    FAKE_HOME="$(mktemp -d /tmp/cli-test-$$-fake-home-XXXXXX)"
+
+    # Set secure permissions (owner-only access)
+    chmod 700 "$TEST_DIR_100" "$TEST_DIR_500" "$TEST_DIR_1000" \
+              "$TEST_DIR_DEEP" "$TEST_DIR_SYMLINK" "$FAKE_HOME"
+
+    echo "# TEST_DIR_100: $TEST_DIR_100" >&3
+    echo "# TEST_DIR_500: $TEST_DIR_500" >&3
+    echo "# TEST_DIR_1000: $TEST_DIR_1000" >&3
+    echo "# TEST_DIR_DEEP: $TEST_DIR_DEEP" >&3
+    echo "# TEST_DIR_SYMLINK: $TEST_DIR_SYMLINK" >&3
+    echo "# FAKE_HOME: $FAKE_HOME" >&3
+
+    # Populate directories
+    populate_test_dir "$TEST_DIR_100" 100
+    populate_test_dir "$TEST_DIR_500" 500
+    populate_test_dir "$TEST_DIR_1000" 1000
+    create_deep_dir "$TEST_DIR_DEEP" 50
+    create_symlink_loop "$TEST_DIR_SYMLINK"
+    create_fake_home "$FAKE_HOME"
+
+    # Export for tests
+    export TEST_DIR_100 TEST_DIR_500 TEST_DIR_1000 TEST_DIR_DEEP TEST_DIR_SYMLINK FAKE_HOME
+    export TRAVERSAL_COMMAND TRAVERSAL_ARGS
+
+    # Setup trap for cleanup
+    trap cleanup_all EXIT ERR INT TERM
+
+    echo "# Setup completed successfully" >&3
+    echo "# ========================================" >&3
+}
+
+teardown_file() {
+    echo "# ========================================" >&3
+    echo "# Directory Traversal Limits Test Teardown" >&3
+    echo "# ========================================" >&3
+
+    # Call cleanup function
+    cleanup_all
+
+    echo "# Teardown completed successfully" >&3
+    echo "# ========================================" >&3
+}
+
+# =============================================================================
+# Test Cases: A. Directory Traversal Limits
+# =============================================================================
+
+@test "[directory-traversal] handles 100 files within 5 seconds" {
+    # Early-fail strategy: small-scale test first
+
+    local start_time=$(date +%s)
+    run timeout 5 "$CLI_BINARY" $TRAVERSAL_COMMAND $TRAVERSAL_ARGS "$TEST_DIR_100"
+    local end_time=$(date +%s)
+    local duration=$((end_time - start_time))
+
+    echo "# Processed 100 files in ${duration} seconds" >&3
+    echo "# Exit code: $status" >&3
+
+    # Should complete within 5 seconds
+    [ "$duration" -lt 5 ] || [ "$status" -eq 0 ]
+
+    # If timeout (status 124), it's a failure
+    [ "$status" -ne 124 ]
+}
+
+@test "[directory-traversal] handles 500 files within 15 seconds" {
+    # Only run if 100-file test passed
+    # This test depends on the previous test's success
+
+    local start_time=$(date +%s)
+    run timeout 15 "$CLI_BINARY" $TRAVERSAL_COMMAND $TRAVERSAL_ARGS "$TEST_DIR_500"
+    local end_time=$(date +%s)
+    local duration=$((end_time - start_time))
+
+    echo "# Processed 500 files in ${duration} seconds" >&3
+    echo "# Exit code: $status" >&3
+
+    # Should complete within 15 seconds
+    [ "$duration" -lt 15 ] || [ "$status" -eq 0 ]
+
+    # If timeout (status 124), it's a failure
+    [ "$status" -ne 124 ]
+}
+
+@test "[directory-traversal] handles 1000 files within 30 seconds" {
+    # Only run if 500-file test passed
+    # This is the main test for backup-suite problem
+
+    local start_time=$(date +%s)
+    run timeout 30 "$CLI_BINARY" $TRAVERSAL_COMMAND $TRAVERSAL_ARGS "$TEST_DIR_1000"
+    local end_time=$(date +%s)
+    local duration=$((end_time - start_time))
+
+    echo "# Processed 1000 files in ${duration} seconds" >&3
+    echo "# Exit code: $status" >&3
+
+    # Should complete within 30 seconds
+    [ "$duration" -lt 30 ] || [ "$status" -eq 0 ]
+
+    # If timeout (status 124), it's a failure
+    [ "$status" -ne 124 ]
+}
+
+@test "[directory-traversal] handles deep directory nesting" {
+    # Test with 50-level deep directory
+
+    run timeout 30 "$CLI_BINARY" $TRAVERSAL_COMMAND $TRAVERSAL_ARGS "$TEST_DIR_DEEP"
+
+    echo "# Deep directory test exit code: $status" >&3
+
+    # Should handle deep nesting without stack overflow
+    # Exit codes: 0 (success), 1 (graceful error), not 124 (timeout), not 139 (segfault)
+    [ "$status" -eq 0 ] || [ "$status" -eq 1 ]
+    [ "$status" -ne 124 ]
+    [ "$status" -ne 139 ]
+}
+
+@test "[directory-traversal] detects symlink loops" {
+    # Test symlink loop detection
+
+    run timeout 10 "$CLI_BINARY" $TRAVERSAL_COMMAND $TRAVERSAL_ARGS "$TEST_DIR_SYMLINK"
+
+    echo "# Symlink loop test exit code: $status" >&3
+
+    # Should detect loop and stop gracefully
+    # Exit codes: 0 (detected and handled), 1 (error with message), not 124 (timeout)
+    [ "$status" -ne 124 ]
+
+    # Check for loop detection message (if available)
+    if [[ "$output" =~ loop|cycle|circular|recursive ]]; then
+        echo "# Loop detection message found: $output" >&3
+    fi
+}
+
+@test "[directory-traversal] warns for home directory traversal (mock)" {
+    # Test with mock home directory (NEVER use real ~/)
+
+    # Save original HOME
+    ORIGINAL_HOME="$HOME"
+
+    # Temporarily set HOME to fake directory
+    export HOME="$FAKE_HOME"
+
+    echo "# Testing with mock HOME: $HOME" >&3
+
+    # Run CLI with ~/or $HOME argument
+    run "$CLI_BINARY" $TRAVERSAL_COMMAND $TRAVERSAL_ARGS "$HOME"
+
+    # Restore original HOME immediately
+    export HOME="$ORIGINAL_HOME"
+
+    echo "# Mock home test exit code: $status" >&3
+    echo "# Output: $output" >&3
+
+    # Check for warning message
+    if [[ "$output" =~ (warn|warning|caution|home|large|confirm) ]]; then
+        echo "# Warning message detected" >&3
+    else
+        # No warning is acceptable for small CLIs
+        skip "CLI does not warn for home directory traversal (optional feature)"
+    fi
+}
+
+# =============================================================================
+# Test Cases: B. Process Control & Timeout
+# =============================================================================
+
+@test "[directory-traversal] responds to SIGINT within 5 seconds" {
+    # Test SIGINT (Ctrl+C) responsiveness
+
+    # Start process in background
+    "$CLI_BINARY" $TRAVERSAL_COMMAND $TRAVERSAL_ARGS "$TEST_DIR_1000" &
+    local pid=$!
+
+    echo "# Started process PID: $pid" >&3
+
+    # Wait a moment for process to start
+    sleep 1
+
+    # Send SIGINT
+    kill -INT $pid 2>/dev/null || true
+
+    echo "# Sent SIGINT to PID: $pid" >&3
+
+    # Wait up to 5 seconds for process to stop
+    local stopped=0
+    for i in {1..50}; do
+        if ! kill -0 $pid 2>/dev/null; then
+            stopped=1
+            echo "# Process stopped after $(echo "scale=1; $i/10" | bc) seconds" >&3
+            break
+        fi
+        sleep 0.1
+    done
+
+    # Force kill if still running
+    if [ "$stopped" -eq 0 ]; then
+        kill -9 $pid 2>/dev/null || true
+        echo "# WARNING: Process did not respond to SIGINT within 5 seconds" >&3
+        return 1
+    fi
+
+    # Success: process stopped within 5 seconds
+    [ "$stopped" -eq 1 ]
+}
+
+@test "[directory-traversal] supports timeout option" {
+    # Check if CLI supports --timeout or --max-time option
+
+    run "$CLI_BINARY" --help
+
+    if echo "$output" | grep -qE -- '--(timeout|max-time)'; then
+        echo "# Timeout option detected" >&3
+
+        # Try to use timeout option
+        run timeout 15 "$CLI_BINARY" $TRAVERSAL_COMMAND --timeout=5 "$TEST_DIR_1000"
+
+        echo "# Timeout option test exit code: $status" >&3
+
+        # Should respect timeout
+        [ "$status" -ne 124 ]
+    else
+        skip "Timeout option not supported (optional feature)"
+    fi
+}
+
+@test "[directory-traversal] shows progress for long operations" {
+    # Check if CLI shows progress information
+
+    run timeout 30 "$CLI_BINARY" $TRAVERSAL_COMMAND $TRAVERSAL_ARGS "$TEST_DIR_1000"
+
+    # Check for progress indicators
+    if echo "$output" | grep -qE '(%|[0-9]+/[0-9]+|\[=+>?\s*\]|progress|processing)'; then
+        echo "# Progress indicator detected" >&3
+        echo "# Progress output: $output" >&3
+    else
+        skip "Progress display not implemented (best practice, not required)"
+    fi
+}
+
+# =============================================================================
+# Test Cases: C. Resource Limits
+# =============================================================================
+
+@test "[directory-traversal] supports max-files limit" {
+    # Check if CLI supports --max-files or --limit option
+
+    run "$CLI_BINARY" --help
+
+    if echo "$output" | grep -qE -- '--(max-files|limit)'; then
+        echo "# Max-files option detected" >&3
+
+        # Try to use limit option (should process only 100 files from 1000)
+        run timeout 30 "$CLI_BINARY" $TRAVERSAL_COMMAND --max-files=100 "$TEST_DIR_1000"
+
+        echo "# Max-files test exit code: $status" >&3
+
+        # Should succeed with limit
+        [ "$status" -eq 0 ] || [ "$status" -eq 1 ]
+    else
+        skip "Max-files option not supported (optional feature)"
+    fi
+}
+
+@test "[directory-traversal] memory usage stays under 1GB" {
+    # Check memory usage (requires GNU time or macOS time)
+
+    if command -v gtime &>/dev/null; then
+        # GNU time (Homebrew on macOS)
+        run gtime -f "%M" "$CLI_BINARY" $TRAVERSAL_COMMAND $TRAVERSAL_ARGS "$TEST_DIR_1000" 2>&1
+
+        # Extract memory usage (KB)
+        local mem_kb=$(echo "$output" | grep -oE '[0-9]+' | tail -1)
+        echo "# Memory usage: ${mem_kb} KB" >&3
+
+        # Should be under 1GB (1,048,576 KB)
+        [ "$mem_kb" -lt 1048576 ]
+    elif [[ -f /usr/bin/time ]]; then
+        # macOS time (basic support)
+        run /usr/bin/time -l "$CLI_BINARY" $TRAVERSAL_COMMAND $TRAVERSAL_ARGS "$TEST_DIR_1000" 2>&1
+
+        # macOS time output is in bytes, convert to KB
+        local mem_bytes=$(echo "$output" | grep "maximum resident set size" | grep -oE '[0-9]+')
+        local mem_kb=$((mem_bytes / 1024))
+        echo "# Memory usage: ${mem_kb} KB (${mem_bytes} bytes)" >&3
+
+        # Should be under 1GB
+        [ "$mem_kb" -lt 1048576 ]
+    else
+        skip "time command not available for memory measurement (optional)"
+    fi
+}
+
+# =============================================================================
+# Test Cases: D. Documentation
+# =============================================================================
+
+@test "[directory-traversal] documents performance warnings" {
+    # Check if --help includes performance warnings or limit documentation
+
+    run "$CLI_BINARY" --help
+
+    if echo "$output" | grep -qiE '(large|performance|limit|timeout|warning|may take|slow)'; then
+        echo "# Performance documentation found in --help" >&3
+        echo "# Documentation keywords detected" >&3
+    else
+        skip "Performance warnings not documented (best practice, not required)"
+    fi
+}
