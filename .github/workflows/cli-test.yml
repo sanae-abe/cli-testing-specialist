@@ -48,6 +48,12 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: brew install jq
 
+      - name: Install Bash 5+ (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install bash
+          echo "$(brew --prefix)/bin/bash" >> $GITHUB_PATH
+
       - name: Setup Zsh
         if: matrix.shell == 'zsh'
         run: |
@@ -60,7 +66,12 @@ jobs:
       - name: Validate agent structure
         run: |
           chmod +x core/*.sh utils/*.sh
-          bash core/validator.sh
+          if [ "$RUNNER_OS" == "macOS" ]; then
+            # Use Homebrew bash for macOS (supports associative arrays)
+            $(brew --prefix)/bin/bash core/validator.sh
+          else
+            bash core/validator.sh
+          fi
 
       - name: Generate test files (if needed)
         run: |
@@ -83,7 +94,12 @@ jobs:
           fi
 
           # Run tests with all report formats
-          bash core/run-tests.sh generated-tests all ./test-reports
+          if [ "$RUNNER_OS" == "macOS" ]; then
+            # Use Homebrew bash for macOS (supports associative arrays)
+            $(brew --prefix)/bin/bash core/run-tests.sh generated-tests all ./test-reports
+          else
+            bash core/run-tests.sh generated-tests all ./test-reports
+          fi
 
       - name: Upload test results
         if: always()
