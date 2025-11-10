@@ -70,6 +70,10 @@ Profiling Options (Phase 2):
   --baseline              Save performance baseline
   --compare-baseline      Compare with saved baseline
 
+Security Options (Phase 2):
+  --security              Enable security vulnerability scanning
+  --security-format FMT   Security report format: html|markdown|json|all (default: html)
+
 Examples:
   # Full workflow
   $0 /usr/bin/git
@@ -107,6 +111,15 @@ Examples:
   # Coverage + Profiling (combined)
   $0 --coverage --profile /usr/bin/ls
 
+  # Security scanning
+  $0 --security -o ./security-tests /usr/bin/ls
+
+  # Security with specific format
+  $0 --security --security-format markdown /usr/bin/git
+
+  # Coverage + Profiling + Security (combined)
+  $0 --coverage --profile --security /usr/bin/ls
+
 Workflow Steps:
   1. CLI Analysis    → {output}/analysis.json
   2. Test Generation → {output}/tests/*.bats
@@ -134,6 +147,8 @@ parse_arguments() {
     local profile_mode=false
     local save_baseline=false
     local compare_baseline=false
+    local security_mode=false
+    local security_format="html"
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -198,6 +213,14 @@ parse_arguments() {
                 compare_baseline=true
                 shift
                 ;;
+            --security)
+                security_mode=true
+                shift
+                ;;
+            --security-format)
+                security_format="$2"
+                shift 2
+                ;;
             -h|--help)
                 show_usage
                 exit 0
@@ -238,6 +261,8 @@ parse_arguments() {
     export PROFILE_MODE="$profile_mode"
     export SAVE_BASELINE="$save_baseline"
     export COMPARE_BASELINE="$compare_baseline"
+    export SECURITY_MODE="$security_mode"
+    export SECURITY_FORMAT="$security_format"
 }
 
 # 出力ディレクトリ構造の作成
@@ -580,6 +605,105 @@ step_profile_execution() {
     return 0
 }
 
+# ステップ6: セキュリティスキャン（Phase 2）
+step_scan_security() {
+    local output_dir="$1"
+    local cli_binary="$2"
+    local security_format="$3"
+
+    log INFO "=== Step 6: Security Vulnerability Scanning (Phase 2) ==="
+
+    # セキュリティデータベース初期化
+    local security_db="$output_dir/security-findings.json"
+
+    bash "$CLI_TEST_ROOT/core/security-scanner.sh" init "$security_db" || {
+        log ERROR "Failed to initialize security database"
+        return 1
+    }
+
+    log INFO "Running comprehensive security scan: $cli_binary"
+
+    # セキュリティスキャン実行
+    local scan_result="$output_dir/security-scan-result.json"
+    bash "$CLI_TEST_ROOT/core/security-scanner.sh" scan "$cli_binary" "cli-test-scan" "$scan_result" || {
+        log ERROR "Security scan failed"
+        return 1
+    }
+
+    log INFO "Security scan completed: $scan_result"
+
+    # データベースに保存
+    local scan_data
+    scan_data=$(<"$scan_result")
+    bash "$CLI_TEST_ROOT/core/security-scanner.sh" save "$scan_data" "$security_db" 2>/dev/null || {
+        log WARN "Failed to save scan result to database (non-critical)"
+    }
+
+    # レポート生成
+    local report_dir="$output_dir/reports"
+    mkdir -p "$report_dir"
+
+    case "$security_format" in
+        html)
+            bash "$CLI_TEST_ROOT/core/security-reporter.sh" \
+                "$scan_result" \
+                "$report_dir/security-report.html" \
+                "html"
+            log INFO "Security report (HTML): $report_dir/security-report.html"
+            ;;
+        markdown|md)
+            bash "$CLI_TEST_ROOT/core/security-reporter.sh" \
+                "$scan_result" \
+                "$report_dir/security-report.md" \
+                "markdown"
+            log INFO "Security report (Markdown): $report_dir/security-report.md"
+            ;;
+        json)
+            bash "$CLI_TEST_ROOT/core/security-reporter.sh" \
+                "$scan_result" \
+                "$report_dir/security-report.json" \
+                "json"
+            log INFO "Security report (JSON): $report_dir/security-report.json"
+            ;;
+        all)
+            bash "$CLI_TEST_ROOT/core/security-reporter.sh" \
+                "$scan_result" \
+                "$report_dir/security-report.html" \
+                "html"
+            bash "$CLI_TEST_ROOT/core/security-reporter.sh" \
+                "$scan_result" \
+                "$report_dir/security-report.md" \
+                "markdown"
+            bash "$CLI_TEST_ROOT/core/security-reporter.sh" \
+                "$scan_result" \
+                "$report_dir/security-report.json" \
+                "json"
+            log INFO "Security reports (all formats): $report_dir/"
+            ;;
+        *)
+            log WARN "Unknown security format: $security_format, using html"
+            bash "$CLI_TEST_ROOT/core/security-reporter.sh" \
+                "$scan_result" \
+                "$report_dir/security-report.html" \
+                "html"
+            ;;
+    esac
+
+    # セキュリティサマリー表示
+    local overall_severity
+    overall_severity=$(jq -r '.overall_severity // "info"' "$scan_result" 2>/dev/null || echo "info")
+
+    if [[ "$overall_severity" == "critical" ]] || [[ "$overall_severity" == "high" ]]; then
+        log WARN "Security scan detected $overall_severity severity issues"
+    elif [[ "$overall_severity" == "medium" ]]; then
+        log INFO "Security scan detected medium severity issues"
+    else
+        log INFO "Security scan completed with low/info severity findings"
+    fi
+
+    return 0
+}
+
 # メイン実行関数
 main() {
     log INFO "CLI Testing Specialist v$VERSION"
@@ -649,6 +773,13 @@ main() {
                 log WARN "Performance profiling failed (non-critical)"
             }
         fi
+
+        # ステップ6: セキュリティスキャン（Phase 2）
+        if [[ "$SECURITY_MODE" == "true" ]]; then
+            step_scan_security "$validated_output_dir" "$CLI_BINARY" "$SECURITY_FORMAT" || {
+                log WARN "Security scanning failed (non-critical)"
+            }
+        fi
     fi
 
     # 完了サマリー
@@ -680,6 +811,16 @@ main() {
         if [[ "$COMPARE_BASELINE" == "true" ]]; then
             log INFO "  Baseline comparison: $validated_output_dir/baseline-comparison.json"
         fi
+    fi
+
+    if [[ "$SECURITY_MODE" == "true" ]]; then
+        log INFO "  Security scan result: $validated_output_dir/security-scan-result.json"
+        case "$SECURITY_FORMAT" in
+            html) log INFO "  Security report: $validated_output_dir/reports/security-report.html" ;;
+            markdown|md) log INFO "  Security report: $validated_output_dir/reports/security-report.md" ;;
+            json) log INFO "  Security report: $validated_output_dir/reports/security-report.json" ;;
+            all) log INFO "  Security reports: $validated_output_dir/reports/security-report.*" ;;
+        esac
     fi
 
     if [[ $exit_code -eq 0 ]]; then
