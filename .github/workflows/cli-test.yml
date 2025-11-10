@@ -87,7 +87,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.os }}-${{ matrix.shell }}
           path: test-reports/
@@ -95,7 +95,7 @@ jobs:
 
       - name: Upload HTML report
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: html-report-${{ matrix.os }}-${{ matrix.shell }}
           path: test-reports/test-report.html
@@ -120,7 +120,7 @@ jobs:
 
     steps:
       - name: Download all HTML reports
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: reports
 
