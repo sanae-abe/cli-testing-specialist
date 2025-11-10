@@ -16,14 +16,14 @@ IFS=$'\n\t'
 trap 'log_error_with_trace "Error at line $LINENO in cli-test"' ERR
 
 # スクリプトのディレクトリを取得
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLI_TEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # 依存ファイルの読み込み
-source "$SCRIPT_DIR/utils/logger.sh"
-source "$SCRIPT_DIR/core/validator.sh"
+source "$CLI_TEST_ROOT/utils/logger.sh"
+source "$CLI_TEST_ROOT/core/validator.sh"
 
 # バージョン情報
-VERSION=$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || echo "1.1.0-dev")
+VERSION=$(cat "$CLI_TEST_ROOT/VERSION" 2>/dev/null || echo "1.1.0-dev")
 
 # デフォルト設定
 DEFAULT_OUTPUT_DIR="./cli-test-output"
@@ -193,7 +193,7 @@ step_analyze() {
     log INFO "Analyzing CLI tool: $cli_binary"
 
     local analysis_output
-    analysis_output=$(bash "$SCRIPT_DIR/core/cli-analyzer.sh" "$cli_binary" "$output_dir/analysis.json" 2>&1) || {
+    analysis_output=$(bash "$CLI_TEST_ROOT/core/cli-analyzer.sh" "$cli_binary" "$output_dir/analysis.json" 2>&1) || {
         log ERROR "CLI analysis failed"
         log ERROR "$analysis_output"
         return 1
@@ -227,7 +227,7 @@ step_generate() {
     log INFO "Generating BATS tests (modules: $test_modules)"
 
     local generation_output
-    generation_output=$(bash "$SCRIPT_DIR/core/test-generator.sh" \
+    generation_output=$(bash "$CLI_TEST_ROOT/core/test-generator.sh" \
         "$output_dir/analysis.json" \
         "$output_dir/tests" \
         "$test_modules" 2>&1) || {
@@ -252,7 +252,7 @@ step_execute() {
     local test_output
     local exit_code=0
 
-    test_output=$(bash "$SCRIPT_DIR/core/run-tests.sh" \
+    test_output=$(bash "$CLI_TEST_ROOT/core/run-tests.sh" \
         "$output_dir/tests" \
         "both" \
         "$output_dir/reports" 2>&1) || exit_code=$?

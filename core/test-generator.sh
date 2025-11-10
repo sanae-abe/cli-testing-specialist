@@ -48,8 +48,17 @@ substitute_template() {
     while IFS= read -r line; do
         # Check if line contains ${TEST_CASES}
         if [[ "$line" == *'${TEST_CASES}'* ]]; then
-            # Insert TEST_CASES content
-            cat "$test_cases_file"
+            # Insert TEST_CASES content with variable substitution
+            while IFS= read -r test_line; do
+                # Replace variables in TEST_CASES
+                test_line="${test_line//\$\{TEST_MODULE\}/$TEST_MODULE}"
+                test_line="${test_line//\$\{CLI_BINARY\}/$CLI_BINARY}"
+                test_line="${test_line//\$\{BINARY_BASENAME\}/$BINARY_BASENAME}"
+                if [[ -n "${SUBCOMMAND:-}" ]]; then
+                    test_line="${test_line//\$\{SUBCOMMAND\}/$SUBCOMMAND}"
+                fi
+                echo "$test_line"
+            done < "$test_cases_file"
         else
             # Replace other variables
             line="${line//\$\{TEST_MODULE\}/$TEST_MODULE}"
@@ -117,23 +126,23 @@ generate_bats_tests() {
     local generated_tests=0
 
     if [[ "$test_modules" == "all" ]] || [[ "$test_modules" == *"basic"* ]]; then
-        generate_basic_validation_tests "$analysis_json" "$validated_output_dir" && ((generated_tests++))
+        generate_basic_validation_tests "$analysis_json" "$validated_output_dir" && ((generated_tests++)) || true
     fi
 
     if [[ "$test_modules" == "all" ]] || [[ "$test_modules" == *"help"* ]]; then
         if [[ $subcommand_count -gt 0 ]]; then
-            generate_help_checker_tests "$analysis_json" "$validated_output_dir" && ((generated_tests++))
+            generate_help_checker_tests "$analysis_json" "$validated_output_dir" && ((generated_tests++)) || true
         else
             log INFO "Skipping help checker tests (no subcommands detected)"
         fi
     fi
 
     if [[ "$test_modules" == "all" ]] || [[ "$test_modules" == *"security"* ]]; then
-        generate_security_scanner_tests "$analysis_json" "$validated_output_dir" && ((generated_tests++))
+        generate_security_scanner_tests "$analysis_json" "$validated_output_dir" && ((generated_tests++)) || true
     fi
 
     if [[ "$test_modules" == "all" ]] || [[ "$test_modules" == *"path"* ]]; then
-        generate_path_handler_tests "$analysis_json" "$validated_output_dir" && ((generated_tests++))
+        generate_path_handler_tests "$analysis_json" "$validated_output_dir" && ((generated_tests++)) || true
     fi
 
     log INFO "Test generation completed"
@@ -276,22 +285,22 @@ generate_security_scanner_tests() {
 
     # セキュリティテストケース（実際の改行を使用）
     TEST_CASES=$(cat <<'EOF'
-@test "[$TEST_MODULE] command injection prevention - semicolon" {
+@test "[${TEST_MODULE}] command injection prevention - semicolon" {
     run "$CLI_BINARY" --version "; echo 'injected'"
     [ "$status" -ne 0 ] || ! echo "$output" | grep -q 'injected'
 }
 
-@test "[$TEST_MODULE] path traversal prevention" {
+@test "[${TEST_MODULE}] path traversal prevention" {
     run "$CLI_BINARY" --help ../../../etc/passwd 2>&1
     [ "$status" -ne 0 ] || ! echo "$output" | grep -q 'root:'
 }
 
-@test "[$TEST_MODULE] null byte injection prevention" {
+@test "[${TEST_MODULE}] null byte injection prevention" {
     run "$CLI_BINARY" --version $'\x00malicious'
     [ "$status" -ne 0 ]
 }
 
-@test "[$TEST_MODULE] buffer overflow prevention - long argument" {
+@test "[${TEST_MODULE}] buffer overflow prevention - long argument" {
     local long_arg=$(printf 'A%.0s' {1..10000})
     run timeout 10 "$CLI_BINARY" --help "$long_arg"
     # Should either fail gracefully or succeed without crashing
@@ -327,20 +336,24 @@ generate_path_handler_tests() {
 
     # パステストケース（実際の改行を使用）
     TEST_CASES=$(cat <<'EOF'
-@test "[$TEST_MODULE] deep path hierarchy handling" {
+@test "[${TEST_MODULE}] deep path hierarchy handling" {
     local deep_path="$(mktemp -d)/a/b/c/d/e/f/g/h/i/j"
     mkdir -p "$deep_path"
 
     # Test with deep path (command depends on CLI capabilities)
     run "$CLI_BINARY" --help
 
-    # Cleanup
-    rm -rf "$(dirname "$(dirname "$(dirname "$(dirname "$(dirname "$(dirname "$(dirname "$(dirname "$(dirname "$(dirname "$deep_path"))))))))))")"
+    # Cleanup - navigate up 10 levels safely
+    local cleanup_path="$deep_path"
+    for i in {1..10}; do
+        cleanup_path="$(dirname "$cleanup_path")"
+    done
+    rm -rf "$cleanup_path"
 
     [ "$status" -eq 0 ] || [ "$status" -eq 1 ]
 }
 
-@test "[$TEST_MODULE] path with spaces handling" {
+@test "[${TEST_MODULE}] path with spaces handling" {
     local space_path="$(mktemp -d)/test with spaces"
     mkdir -p "$space_path"
 
@@ -350,7 +363,7 @@ generate_path_handler_tests() {
     [ "$status" -eq 0 ] || [ "$status" -eq 1 ]
 }
 
-@test "[$TEST_MODULE] path with special characters" {
+@test "[${TEST_MODULE}] path with special characters" {
     local special_path="$(mktemp -d)/test-_@#"
     mkdir -p "$special_path" 2>/dev/null || skip "Special characters not supported by filesystem"
 

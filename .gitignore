@@ -50,3 +50,5 @@ config/local-*.yaml
 cli-analysis.json
 test-analysis.json
 generated-tests/
+test-output/
+cli-test-output/
