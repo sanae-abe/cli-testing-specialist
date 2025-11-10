@@ -1,0 +1,326 @@
+#!/usr/bin/env bash
+#
+# cli-test - CLI Testing Specialist メインオーケストレータースクリプト
+# CLI Testing Specialist Agent v1.1.0
+#
+# 全ワークフローの統合実行:
+# 1. CLI解析 (cli-analyzer.sh)
+# 2. テスト生成 (test-generator.sh)
+# 3. テスト実行 (run-tests.sh)
+# 4. レポート出力
+
+set -euo pipefail
+IFS=$'\n\t'
+
+# エラートラップ
+trap 'log_error_with_trace "Error at line $LINENO in cli-test"' ERR
+
+# スクリプトのディレクトリを取得
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# 依存ファイルの読み込み
+source "$SCRIPT_DIR/utils/logger.sh"
+source "$SCRIPT_DIR/core/validator.sh"
+
+# バージョン情報
+VERSION=$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || echo "1.1.0-dev")
+
+# デフォルト設定
+DEFAULT_OUTPUT_DIR="./cli-test-output"
+DEFAULT_REPORT_FORMAT="both"
+DEFAULT_TEST_MODULES="all"
+
+# 使用方法表示
+show_usage() {
+    cat <<EOF
+CLI Testing Specialist v$VERSION
+
+Usage: $0 [OPTIONS] <cli-binary>
+
+Options:
+  -o, --output DIR        Output directory (default: $DEFAULT_OUTPUT_DIR)
+  -f, --format FORMAT     Report format: markdown|json|both (default: $DEFAULT_REPORT_FORMAT)
+  -m, --modules MODULES   Test modules: all|basic|help|security|path (default: $DEFAULT_TEST_MODULES)
+  -s, --skip-analysis     Skip CLI analysis (use existing analysis.json)
+  -S, --skip-generation   Skip test generation (use existing tests)
+  -r, --report-only       Generate report only (skip all execution)
+  -v, --verbose           Enable verbose logging (DEBUG level)
+  -h, --help              Show this help message
+
+Examples:
+  # Full workflow
+  $0 /usr/bin/git
+
+  # Custom output directory
+  $0 -o ./git-tests /usr/bin/git
+
+  # Only specific modules
+  $0 -m "basic,security" /usr/bin/docker
+
+  # Skip analysis (use existing)
+  $0 -s -o ./existing-tests /usr/bin/ls
+
+  # Report only
+  $0 -r -o ./existing-tests
+
+Workflow Steps:
+  1. CLI Analysis    → {output}/analysis.json
+  2. Test Generation → {output}/tests/*.bats
+  3. Test Execution  → TAP output
+  4. Report Generation → {output}/reports/
+
+EOF
+}
+
+# コマンドライン引数パース
+parse_arguments() {
+    local cli_binary=""
+    local output_dir="$DEFAULT_OUTPUT_DIR"
+    local report_format="$DEFAULT_REPORT_FORMAT"
+    local test_modules="$DEFAULT_TEST_MODULES"
+    local skip_analysis=false
+    local skip_generation=false
+    local report_only=false
+    local verbose=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -o|--output)
+                output_dir="$2"
+                shift 2
+                ;;
+            -f|--format)
+                report_format="$2"
+                shift 2
+                ;;
+            -m|--modules)
+                test_modules="$2"
+                shift 2
+                ;;
+            -s|--skip-analysis)
+                skip_analysis=true
+                shift
+                ;;
+            -S|--skip-generation)
+                skip_generation=true
+                shift
+                ;;
+            -r|--report-only)
+                report_only=true
+                shift
+                ;;
+            -v|--verbose)
+                verbose=true
+                export CLI_TEST_LOG_LEVEL=DEBUG
+                shift
+                ;;
+            -h|--help)
+                show_usage
+                exit 0
+                ;;
+            -*)
+                log ERROR "Unknown option: $1"
+                show_usage
+                exit 1
+                ;;
+            *)
+                cli_binary="$1"
+                shift
+                ;;
+        esac
+    done
+
+    # レポート専用モードでない場合はバイナリ必須
+    if [[ "$report_only" == "false" ]] && [[ -z "$cli_binary" ]]; then
+        log ERROR "CLI binary is required"
+        show_usage
+        exit 1
+    fi
+
+    # 設定をグローバル変数にエクスポート
+    export CLI_BINARY="$cli_binary"
+    export OUTPUT_DIR="$output_dir"
+    export REPORT_FORMAT="$report_format"
+    export TEST_MODULES="$test_modules"
+    export SKIP_ANALYSIS="$skip_analysis"
+    export SKIP_GENERATION="$skip_generation"
+    export REPORT_ONLY="$report_only"
+    export VERBOSE="$verbose"
+}
+
+# 出力ディレクトリ構造の作成
+setup_output_structure() {
+    local output_dir="$1"
+
+    log INFO "Setting up output directory structure"
+
+    local validated_dir
+    validated_dir=$(validate_output_dir "$output_dir") || {
+        log ERROR "Failed to validate output directory"
+        return 1
+    }
+
+    # サブディレクトリ作成
+    mkdir -p "$validated_dir/tests"
+    mkdir -p "$validated_dir/reports"
+
+    log DEBUG "Created directory structure:"
+    log DEBUG "  - $validated_dir/tests"
+    log DEBUG "  - $validated_dir/reports"
+
+    echo "$validated_dir"
+}
+
+# ステップ1: CLI解析
+step_analyze() {
+    local cli_binary="$1"
+    local output_dir="$2"
+
+    log INFO "=== Step 1: CLI Analysis ==="
+
+    if [[ "$SKIP_ANALYSIS" == "true" ]]; then
+        log INFO "Skipping CLI analysis (using existing)"
+
+        if [[ ! -f "$output_dir/analysis.json" ]]; then
+            log ERROR "analysis.json not found in $output_dir"
+            return 1
+        fi
+
+        log INFO "Using existing: $output_dir/analysis.json"
+        return 0
+    fi
+
+    log INFO "Analyzing CLI tool: $cli_binary"
+
+    local analysis_output
+    analysis_output=$(bash "$SCRIPT_DIR/core/cli-analyzer.sh" "$cli_binary" "$output_dir/analysis.json" 2>&1) || {
+        log ERROR "CLI analysis failed"
+        log ERROR "$analysis_output"
+        return 1
+    }
+
+    log INFO "Analysis completed: $output_dir/analysis.json"
+}
+
+# ステップ2: テスト生成
+step_generate() {
+    local output_dir="$1"
+    local test_modules="$2"
+
+    log INFO "=== Step 2: Test Generation ==="
+
+    if [[ "$SKIP_GENERATION" == "true" ]]; then
+        log INFO "Skipping test generation (using existing)"
+
+        local bats_count
+        bats_count=$(find "$output_dir/tests" -name "*.bats" -type f 2>/dev/null | wc -l)
+
+        if [[ $bats_count -eq 0 ]]; then
+            log ERROR "No .bats files found in $output_dir/tests"
+            return 1
+        fi
+
+        log INFO "Using existing $bats_count test files"
+        return 0
+    fi
+
+    log INFO "Generating BATS tests (modules: $test_modules)"
+
+    local generation_output
+    generation_output=$(bash "$SCRIPT_DIR/core/test-generator.sh" \
+        "$output_dir/analysis.json" \
+        "$output_dir/tests" \
+        "$test_modules" 2>&1) || {
+        log ERROR "Test generation failed"
+        log ERROR "$generation_output"
+        return 1
+    }
+
+    local bats_count
+    bats_count=$(find "$output_dir/tests" -name "*.bats" -type f | wc -l)
+    log INFO "Generated $bats_count test files"
+}
+
+# ステップ3: テスト実行
+step_execute() {
+    local output_dir="$1"
+
+    log INFO "=== Step 3: Test Execution ==="
+
+    log INFO "Running BATS tests"
+
+    local test_output
+    local exit_code=0
+
+    test_output=$(bash "$SCRIPT_DIR/core/run-tests.sh" \
+        "$output_dir/tests" \
+        "both" \
+        "$output_dir/reports" 2>&1) || exit_code=$?
+
+    if [[ $exit_code -eq 0 ]]; then
+        log INFO "All tests passed ✅"
+    else
+        log WARN "Some tests failed (exit code: $exit_code) ❌"
+    fi
+
+    log INFO "Reports generated in: $output_dir/reports"
+
+    return $exit_code
+}
+
+# メイン実行関数
+main() {
+    log INFO "CLI Testing Specialist v$VERSION"
+    log INFO "Starting workflow execution"
+
+    # 引数パース
+    parse_arguments "$@"
+
+    # 出力ディレクトリ準備
+    local validated_output_dir
+    validated_output_dir=$(setup_output_structure "$OUTPUT_DIR") || exit 1
+
+    # ワークフロー実行
+    local exit_code=0
+
+    if [[ "$REPORT_ONLY" == "true" ]]; then
+        log INFO "Report-only mode: skipping analysis, generation, and execution"
+
+        # レポートが既に存在するか確認
+        if [[ -f "$validated_output_dir/reports/test-report.md" ]]; then
+            log INFO "Report already exists: $validated_output_dir/reports/test-report.md"
+        else
+            log ERROR "No existing report found in $validated_output_dir/reports"
+            exit 1
+        fi
+    else
+        # ステップ1: CLI解析
+        step_analyze "$CLI_BINARY" "$validated_output_dir" || exit_code=$?
+        [[ $exit_code -ne 0 ]] && exit $exit_code
+
+        # ステップ2: テスト生成
+        step_generate "$validated_output_dir" "$TEST_MODULES" || exit_code=$?
+        [[ $exit_code -ne 0 ]] && exit $exit_code
+
+        # ステップ3: テスト実行
+        step_execute "$validated_output_dir" || exit_code=$?
+    fi
+
+    # 完了サマリー
+    log INFO "=== Workflow Completed ==="
+    log INFO "  Output directory: $validated_output_dir"
+    log INFO "  Reports: $validated_output_dir/reports/"
+
+    if [[ $exit_code -eq 0 ]]; then
+        log INFO "  Status: ✅ SUCCESS"
+    else
+        log WARN "  Status: ❌ FAILED (exit code: $exit_code)"
+    fi
+
+    exit $exit_code
+}
+
+# メイン実行（スクリプト直接実行時のみ）
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
