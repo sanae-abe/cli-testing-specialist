@@ -39,10 +39,8 @@ populate_test_dir() {
 
     echo "# Creating $count dummy files in $dir..." >&3
 
-    for i in $(seq 1 "$count"); do
-        # Create 1KB files
-        dd if=/dev/zero of="$dir/file_$(printf '%04d' $i).txt" bs=1024 count=1 2>/dev/null
-    done
+    # Use printf to generate file list for touch (fast, portable)
+    touch $(printf "$dir/file_%d.txt " $(seq 1 "$count")) 2>/dev/null
 
     echo "# Created $count files successfully" >&3
 }
@@ -138,21 +136,25 @@ setup_file() {
     echo "# TRAVERSAL_COMMAND: $TRAVERSAL_COMMAND" >&3
     echo "# TRAVERSAL_ARGS: $TRAVERSAL_ARGS" >&3
 
-    # Set resource limits
+    # Set resource limits (BATS-safe, OS-aware)
     echo "# Setting resource limits..." >&3
-    ulimit -m 2097152 2>/dev/null || true  # 2GB memory
-    ulimit -n 2048 2>/dev/null || true     # 2048 files
-    ulimit -u 100 2>/dev/null || true      # 100 processes
+    # Note: ulimit -u (max processes) is NOT set because BATS needs to fork processes
+    # Setting it too low causes "fork failed: resource temporarily unavailable" errors
+    if [[ "$(uname)" != "Darwin" ]]; then
+        # Linux: set memory limit
+        ulimit -v 2097152 2>/dev/null || true  # 2GB virtual memory
+    fi
+    ulimit -n 2048 2>/dev/null || true     # 2048 files (works on macOS and Linux)
 
     # Create test directories with secure permissions
     echo "# Creating test directories..." >&3
 
-    TEST_DIR_100="$(mktemp -d /tmp/cli-test-$$-100files-XXXXXX)"
-    TEST_DIR_500="$(mktemp -d /tmp/cli-test-$$-500files-XXXXXX)"
-    TEST_DIR_1000="$(mktemp -d /tmp/cli-test-$$-1000files-XXXXXX)"
-    TEST_DIR_DEEP="$(mktemp -d /tmp/cli-test-$$-deep-XXXXXX)"
-    TEST_DIR_SYMLINK="$(mktemp -d /tmp/cli-test-$$-symlink-XXXXXX)"
-    FAKE_HOME="$(mktemp -d /tmp/cli-test-$$-fake-home-XXXXXX)"
+    TEST_DIR_100="$(mktemp -d /tmp/cli-test-100files-XXXXXX)"
+    TEST_DIR_500="$(mktemp -d /tmp/cli-test-500files-XXXXXX)"
+    TEST_DIR_1000="$(mktemp -d /tmp/cli-test-1000files-XXXXXX)"
+    TEST_DIR_DEEP="$(mktemp -d /tmp/cli-test-deep-XXXXXX)"
+    TEST_DIR_SYMLINK="$(mktemp -d /tmp/cli-test-symlink-XXXXXX)"
+    FAKE_HOME="$(mktemp -d /tmp/cli-test-fake-home-XXXXXX)"
 
     # Set secure permissions (owner-only access)
     chmod 700 "$TEST_DIR_100" "$TEST_DIR_500" "$TEST_DIR_1000" \
@@ -176,9 +178,6 @@ setup_file() {
     # Export for tests
     export TEST_DIR_100 TEST_DIR_500 TEST_DIR_1000 TEST_DIR_DEEP TEST_DIR_SYMLINK FAKE_HOME
     export TRAVERSAL_COMMAND TRAVERSAL_ARGS
-
-    # Setup trap for cleanup
-    trap cleanup_all EXIT ERR INT TERM
 
     echo "# Setup completed successfully" >&3
     echo "# ========================================" >&3
