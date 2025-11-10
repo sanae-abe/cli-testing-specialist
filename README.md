@@ -1,89 +1,91 @@
 # CLI Testing Specialist Agent
 
-**最終更新**: 2025-11-10
-**リリース予定**: v1.0.0 (2026-02-07)
-**Claude Code専用**: セキュアで包括的なCLIツールテストフレームワーク
+**Languages**: [English](README.md) | [日本語](README.ja.md)
+
+**Last Updated**: 2025-11-10
+**Release Target**: v1.0.0 (2026-02-07)
+**Claude Code Exclusive**: Secure and comprehensive CLI tool testing framework
 
 ---
 
-## 📑 目次
+## 📑 Table of Contents
 
-- [概要](#概要)
-- [クイックスタート](#クイックスタート)
-- [インストール](#インストール)
-- [機能一覧](#機能一覧)
-- [レポート形式](#レポート形式)
-- [CI/CD統合](#cicd統合)
-- [セキュリティ機能](#セキュリティ機能)
-- [設定](#設定)
-- [ファイル構造](#ファイル構造)
-- [サンプルレポート](#サンプルレポート)
-- [ライセンス](#ライセンス)
-- [貢献](#貢献)
-- [サポート](#サポート)
-
----
-
-## 概要
-
-CLI Testing Specialist Agentは、CLIツールの品質とセキュリティを自動検証する包括的なテストフレームワークです。
-
-### 主要機能
-
-- 🔒 **セキュリティテスト**: OWASP準拠の自動スキャン
-- ✅ **包括的検証**: 11カテゴリ、140-160テストケース
-- 🎯 **入力検証テスト** (Phase 2.5): 数値/パス/列挙型オプション自動検証
-- 🛡️ **破壊的操作テスト** (Phase 2.5): 確認プロンプト・安全性検証
-- 🐚 **マルチシェル対応**: bash/zsh（将来対応予定: fish）
-- 📊 **詳細レポート**: Markdown/JSON/HTML/JUnit XML
-- 🔄 **CI/CD統合**: GitHub Actions & GitLab CI対応
-- 🐳 **Docker統合**: 隔離環境でのテスト実行（オプション）
-- ⚡ **高速化** (Phase 2.5): テスト生成5-10倍高速化
+- [Overview](#overview)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [Features](#features)
+- [Report Formats](#report-formats)
+- [CI/CD Integration](#cicd-integration)
+- [Security Features](#security-features)
+- [Configuration](#configuration)
+- [File Structure](#file-structure)
+- [Sample Reports](#sample-reports)
+- [License](#license)
+- [Contributing](#contributing)
+- [Support](#support)
 
 ---
 
-## クイックスタート
+## Overview
+
+CLI Testing Specialist Agent is a comprehensive testing framework that automatically validates the quality and security of CLI tools.
+
+### Key Features
+
+- 🔒 **Security Testing**: OWASP-compliant automated scanning
+- ✅ **Comprehensive Validation**: 11 categories, 140-160 test cases
+- 🎯 **Input Validation Testing** (Phase 2.5): Automatic validation of numeric/path/enum options
+- 🛡️ **Destructive Operation Testing** (Phase 2.5): Confirmation prompt and safety validation
+- 🐚 **Multi-Shell Support**: bash/zsh (future support planned: fish)
+- 📊 **Detailed Reports**: Markdown/JSON/HTML/JUnit XML
+- 🔄 **CI/CD Integration**: GitHub Actions & GitLab CI support
+- 🐳 **Docker Integration**: Test execution in isolated environments (optional)
+- ⚡ **Performance Boost** (Phase 2.5): 5-10x faster test generation
+
+---
+
+## Quick Start
 
 ```bash
-# 1. CLIツールを解析
+# 1. Analyze CLI tool
 bash core/cli-analyzer.sh /usr/local/bin/your-cli
 
-# 2. テストを生成（全カテゴリ）
+# 2. Generate tests (all categories)
 bash core/test-generator.sh cli-analysis.json test-output all
 
-# 3. テストを実行
+# 3. Run tests
 bats test-output/*.bats
 
-# 4. HTMLレポートを生成
+# 4. Generate HTML report
 bash core/run-tests.sh test-output html ./reports
 
-# 5. ブラウザで開く
+# 5. Open in browser
 open reports/test-report.html  # macOS
 # xdg-open reports/test-report.html  # Linux
 ```
 
 ---
 
-## インストール
+## Installation
 
 ```bash
-# Claude Code経由で自動インストール（推奨）
-# Agentが自動的にセットアップを実行
+# Automatic installation via Claude Code (recommended)
+# Agent will automatically execute setup
 
-# または手動インストール
+# Or manual installation
 git clone <repository-url>
 cd cli-testing-specialist
 ./bin/cli-test --version
 ```
 
-### 依存関係
+### Dependencies
 
-CLI Testing Specialist Agentは以下のツールに依存しています：
+CLI Testing Specialist Agent depends on the following tools:
 
-#### 必須（コア機能）
-- **Bash 4.0+**: テストエンジンの実行環境
-- **jq**: JSON処理（CLIメタデータ解析、レポート生成）
-- **BATS**: テスト実行フレームワーク
+#### Required (Core Features)
+- **Bash 4.0+**: Test engine execution environment
+- **jq**: JSON processing (CLI metadata analysis, report generation)
+- **BATS**: Test execution framework
   ```bash
   # macOS
   brew install bats-core
@@ -97,8 +99,8 @@ CLI Testing Specialist Agentは以下のツールに依存しています：
   sudo ./install.sh /usr/local
   ```
 
-#### Phase 2.5+ 必須（入力検証機能）
-- **yq v4.x**: YAML処理（オプション型推論、制約定義）
+#### Required for Phase 2.5+ (Input Validation Features)
+- **yq v4.x**: YAML processing (option type inference, constraint definitions)
   ```bash
   # macOS
   brew install yq
@@ -115,8 +117,8 @@ CLI Testing Specialist Agentは以下のツールに依存しています：
   yq --version  # Should show: yq (https://github.com/mikefarah/yq/) version 4.x
   ```
 
-#### オプション（拡張機能）
-- **SQLite3**: カバレッジトラッキング（Phase 2機能）
+#### Optional (Extended Features)
+- **SQLite3**: Coverage tracking (Phase 2 feature)
   ```bash
   # macOS
   brew install sqlite3
@@ -124,13 +126,13 @@ CLI Testing Specialist Agentは以下のツールに依存しています：
   # Ubuntu/Debian
   apt-get install sqlite3
   ```
-- **Docker**: 隔離環境でのテスト実行
-- **envsubst** (gettext): テンプレート変数置換（Bashフォールバックあり）
+- **Docker**: Test execution in isolated environments
+- **envsubst** (gettext): Template variable substitution (Bash fallback available)
 
-#### 依存関係チェック
+#### Dependency Check
 
 ```bash
-# 必須ツールの確認
+# Verify required tools
 command -v bash && echo "✓ Bash"
 command -v jq && echo "✓ jq"
 command -v bats && echo "✓ BATS"
@@ -143,129 +145,129 @@ yq --version 2>&1 | grep -q "version 4" && echo "✓ yq v4.x" || echo "⚠ yq v4
 
 ---
 
-## 機能一覧
+## Features
 
-| カテゴリ | 説明 | テスト数 |
+| Category | Description | Test Count |
 |---------|------|---------|
-| 基本動作検証 | ヘルプ、バージョン、終了コード | 10 |
-| サブコマンドヘルプ | 全サブコマンドの網羅的検証 | 動的 |
-| セキュリティ | インジェクション、機密漏洩、TOCTOU | 25 |
-| パス処理 | 特殊文字、深い階層、Unicode | 20 |
-| マルチシェル | bash/zsh互換性 | 12 |
-| 入力検証（基本） | 不正値、エッジケース | 12 |
-| **入力検証（拡張）** 🆕 | **数値/パス/列挙型オプション検証** | **25** |
-| **破壊的操作** 🆕 | **確認プロンプト、--yes/--forceフラグ** | **16** |
-| 出力検証 | フォーマット、カラー出力 | 8 |
-| 環境依存 | OS、環境変数 | 10 |
-| パフォーマンス | 起動時間、メモリ使用量 | 6 |
-| ドキュメント整合性 | README vs ヘルプ | 5 |
-| **レポート** | **4形式（Markdown/JSON/HTML/JUnit）** | - |
+| Basic Validation | Help, version, exit codes | 10 |
+| Subcommand Help | Comprehensive validation of all subcommands | Dynamic |
+| Security | Injection, secret leaks, TOCTOU | 25 |
+| Path Handling | Special characters, deep hierarchies, Unicode | 20 |
+| Multi-Shell | bash/zsh compatibility | 12 |
+| Input Validation (Basic) | Invalid values, edge cases | 12 |
+| **Input Validation (Extended)** 🆕 | **Numeric/path/enum option validation** | **25** |
+| **Destructive Operations** 🆕 | **Confirmation prompts, --yes/--force flags** | **16** |
+| Output Validation | Format, color output | 8 |
+| Environment Dependencies | OS, environment variables | 10 |
+| Performance | Startup time, memory usage | 6 |
+| Documentation Consistency | README vs help | 5 |
+| **Reports** | **4 formats (Markdown/JSON/HTML/JUnit)** | - |
 
-**合計**: 約140-160テストケース（Phase 2.5で41テストケース追加）
+**Total**: Approximately 140-160 test cases (41 test cases added in Phase 2.5)
 
 ---
 
-## レポート形式
+## Report Formats
 
-### 1. Markdown形式 (`.md`)
-GitHub/GitLabで直接表示可能な人間が読みやすい形式
+### 1. Markdown Format (`.md`)
+Human-readable format that can be directly displayed on GitHub/GitLab
 
 ```bash
 bash core/run-tests.sh ./generated-tests markdown ./reports
 ```
 
-### 2. JSON形式 (`.json`)
-CI/CD統合とプログラム処理に最適
+### 2. JSON Format (`.json`)
+Optimal for CI/CD integration and programmatic processing
 
 ```bash
 bash core/run-tests.sh ./generated-tests json ./reports
 
-# jqで成功率を取得
+# Get success rate with jq
 jq -r '.summary.success_rate' reports/test-report.json
 ```
 
-### 3. HTML形式 (`.html`) - **新機能**
-インタラクティブなブラウザ表示、GitHub Pages公開対応
+### 3. HTML Format (`.html`) - **New Feature**
+Interactive browser display, GitHub Pages publication support
 
 ```bash
 bash core/run-tests.sh ./generated-tests html ./reports
-open reports/test-report.html  # ブラウザで開く
+open reports/test-report.html  # Open in browser
 ```
 
-**HTML機能**:
-- Bootstrap 5によるモダンなデザイン
-- リアルタイム検索・フィルタリング
-- アニメーション付き成功率グラフ
-- Shell互換性マトリクス表示
-- レスポンシブデザイン対応
+**HTML Features**:
+- Modern design with Bootstrap 5
+- Real-time search and filtering
+- Animated success rate graphs
+- Shell compatibility matrix display
+- Responsive design support
 
-### 4. 全形式一括生成 (`all`)
+### 4. All Formats at Once (`all`)
 
 ```bash
 bash core/run-tests.sh ./generated-tests all ./reports
 ```
 
-詳細は [`docs/REPORT-FORMATS.md`](docs/REPORT-FORMATS.md) を参照してください。
+For details, see [`docs/REPORT-FORMATS.md`](docs/REPORT-FORMATS.md).
 
 ---
 
-## CI/CD統合
+## CI/CD Integration
 
 ### GitHub Actions
 
-`.github/workflows/cli-test.yml` で自動テスト＆レポート公開
+Automatic testing and report publishing with `.github/workflows/cli-test.yml`
 
-**機能**:
-- Ubuntu/macOS × Bash/Zshマトリクステスト
-- HTMLレポートをGitHub Pagesに自動デプロイ
-- テスト結果をArtifactとして保存
-- ShellCheck自動Lint
+**Features**:
+- Ubuntu/macOS × Bash/Zsh matrix testing
+- Automatic HTML report deployment to GitHub Pages
+- Test results saved as Artifacts
+- Automatic ShellCheck linting
 
-**使用方法**:
-1. リポジトリ設定でGitHub Pagesを有効化
-2. mainブランチにpushで自動実行
-3. `https://[username].github.io/[repo]/` でレポート閲覧
+**Usage**:
+1. Enable GitHub Pages in repository settings
+2. Auto-execution on push to main branch
+3. View reports at `https://[username].github.io/[repo]/`
 
 ### GitLab CI/CD
 
-`.gitlab-ci.yml` でマルチShell環境テスト＆GitLab Pages公開
+Multi-shell environment testing and GitLab Pages publishing with `.gitlab-ci.yml`
 
-**機能**:
-- Bash/Zsh/Dash互換性テスト
-- レポート集約ステージ
-- GitLab Pagesへの自動デプロイ
-- スケジュール実行によるリグレッションテスト
+**Features**:
+- Bash/Zsh/Dash compatibility testing
+- Report aggregation stage
+- Automatic deployment to GitLab Pages
+- Regression testing via scheduled execution
 
-**パイプラインステージ**:
-1. `validate` - 構造検証＆ShellCheck
-2. `test` - 複数Shell環境でテスト実行
-3. `report` - レポート集約
-4. `deploy` - GitLab Pagesデプロイ
-
----
-
-## セキュリティ機能
-
-### 入力バリデーション
-- CLIバイナリパスの検証
-- パストラバーサル攻撃防御
-- コマンドインジェクション対策
-
-### セキュアな実行環境
-- 一時ファイルのumask 077
-- TOCTOU攻撃対策（mktemp使用）
-- Docker非rootユーザー実行
-
-### セキュリティスキャン
-- OWASP Top 10準拠
-- 機密情報漏洩チェック
-- 依存関係脆弱性スキャン
+**Pipeline Stages**:
+1. `validate` - Structure validation & ShellCheck
+2. `test` - Test execution in multiple shell environments
+3. `report` - Report aggregation
+4. `deploy` - GitLab Pages deployment
 
 ---
 
-## 設定
+## Security Features
 
-### デフォルト設定ファイル
+### Input Validation
+- CLI binary path verification
+- Path traversal attack defense
+- Command injection protection
+
+### Secure Execution Environment
+- Temporary file umask 077
+- TOCTOU attack protection (using mktemp)
+- Docker non-root user execution
+
+### Security Scanning
+- OWASP Top 10 compliance
+- Secret leak detection
+- Dependency vulnerability scanning
+
+---
+
+## Configuration
+
+### Default Configuration File
 
 ```yaml
 # ~/.config/cli-test/config.yaml
@@ -289,88 +291,87 @@ cli-testing-specialist:
     file: "/tmp/cli-test.log"
 ```
 
-詳細は `config/schema.yaml` を参照してください。
+For details, refer to `config/schema.yaml`.
 
 ---
 
-## サンプルレポート
+## Sample Reports
 
-サンプルテストとレポートを生成して確認できます:
+You can generate and review sample tests and reports:
 
 ```bash
-# サンプルテスト実行＆全形式レポート生成
+# Run sample tests and generate all format reports
 bash core/run-tests.sh sample-tests all sample-reports
 
-# 生成されたファイル
+# Generated files
 sample-reports/
-├── test-report.html  # HTMLレポート (22KB)
-├── test-report.json  # JSONレポート (255B)
-└── test-report.md    # Markdownレポート (968B)
+├── test-report.html  # HTML report (22KB)
+├── test-report.json  # JSON report (255B)
+└── test-report.md    # Markdown report (968B)
 
-# HTMLレポートをブラウザで開く
+# Open HTML report in browser
 open sample-reports/test-report.html
 ```
 
-**サンプルレポート**: [`sample-reports/test-report.html`](sample-reports/test-report.html)
+**Sample Report**: [`sample-reports/test-report.html`](sample-reports/test-report.html)
 
 ---
 
-## ライセンス
+## License
 
 MIT License
 
 ---
 
-## 貢献
+## Contributing
 
-プルリクエストを歓迎します。大きな変更の場合は、まずissueを開いて変更内容を議論してください。
+Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 
 ---
 
-## サポート
+## Support
 
-- **ドキュメント**: `docs/` ディレクトリ
-  - [`REPORT-FORMATS.md`](docs/REPORT-FORMATS.md) - レポート形式詳細ガイド
-  - [`INPUT-VALIDATION-GUIDE.md`](docs/INPUT-VALIDATION-GUIDE.md) - 入力検証ガイド
-  - [`INPUT-VALIDATION-PLAN-v2.md`](docs/INPUT-VALIDATION-PLAN-v2.md) - Phase 2.5実装計画
-  - [`PHASE2-PLAN.md`](docs/PHASE2-PLAN.md) - Phase 2実装計画
-  - [`PHASE25-FINAL-REPORT.md`](docs/PHASE25-FINAL-REPORT.md) - Phase 2.5最終レポート
+- **Documentation**: `docs/` directory
+  - [`REPORT-FORMATS.md`](docs/REPORT-FORMATS.md) - Detailed report format guide
+  - [`INPUT-VALIDATION-GUIDE.md`](docs/INPUT-VALIDATION-GUIDE.md) - Input validation guide
+  - [`INPUT-VALIDATION-PLAN-v2.md`](docs/INPUT-VALIDATION-PLAN-v2.md) - Phase 2.5 implementation plan
+  - [`PHASE2-PLAN.md`](docs/PHASE2-PLAN.md) - Phase 2 implementation plan
+  - [`PHASE25-FINAL-REPORT.md`](docs/PHASE25-FINAL-REPORT.md) - Phase 2.5 final report
 - **Issues**: GitHub Issues
 
 ---
 
-## ファイル構造
+## File Structure
 
 ```
 cli-testing-specialist/
 ├── core/
-│   ├── cli-analyzer.sh            # CLI解析エンジン
-│   ├── test-generator.sh          # BATS生成エンジン（Phase 2.5拡張）
-│   ├── option-analyzer.sh         # オプション型推論エンジン（Phase 2.5新規）
-│   ├── coverage-tracker.sh        # カバレッジトラッキング（Phase 2）
-│   ├── run-tests.sh               # テスト実行＆レポート生成
-│   ├── report-generator-html.sh   # HTMLレポート生成
-│   ├── shell-detector.sh          # Shell検出エンジン
-│   └── validator.sh               # 入力検証エンジン
-├── config/                        # Phase 2.5新規
-│   ├── option-patterns.yaml       # オプション型パターン定義
-│   ├── numeric-constraints.yaml   # 数値制約定義
-│   └── enum-definitions.yaml      # 列挙型定義
-├── templates/                     # Phase 2.5新規
-│   ├── bats-test.template         # BATSテンプレート
-│   ├── input-validation.fragment  # 入力検証テストフラグメント
-│   └── destructive-ops.fragment   # 破壊的操作テストフラグメント
+│   ├── cli-analyzer.sh            # CLI analysis engine
+│   ├── test-generator.sh          # BATS generation engine (Phase 2.5 extended)
+│   ├── option-analyzer.sh         # Option type inference engine (Phase 2.5 new)
+│   ├── coverage-tracker.sh        # Coverage tracking (Phase 2)
+│   ├── run-tests.sh               # Test execution & report generation
+│   ├── report-generator-html.sh   # HTML report generation
+│   ├── shell-detector.sh          # Shell detection engine
+│   └── validator.sh               # Input validation engine
+├── config/                        # Phase 2.5 new
+│   ├── option-patterns.yaml       # Option type pattern definitions
+│   ├── numeric-constraints.yaml   # Numeric constraint definitions
+│   └── enum-definitions.yaml      # Enum definitions
+├── templates/                     # Phase 2.5 new
+│   ├── bats-test.template         # BATS template
+│   ├── input-validation.fragment  # Input validation test fragment
+│   └── destructive-ops.fragment   # Destructive operation test fragment
 ├── docs/
-│   ├── REPORT-FORMATS.md          # レポート形式ガイド
-│   ├── INPUT-VALIDATION-GUIDE.md  # 入力検証ガイド（Phase 2.5新規）
-│   ├── PHASE2-PLAN.md             # Phase 2実装計画
-│   └── INPUT-VALIDATION-PLAN-v2.md # Phase 2.5実装計画
-├── .github/workflows/cli-test.yml # GitHub Actions設定
-├── .gitlab-ci.yml                 # GitLab CI設定
-├── sample-tests/demo.bats         # サンプルテスト
-├── sample-reports/                # サンプルレポート出力
-└── README.md                      # このファイル
+│   ├── REPORT-FORMATS.md          # Report format guide
+│   ├── INPUT-VALIDATION-GUIDE.md  # Input validation guide (Phase 2.5 new)
+│   ├── PHASE2-PLAN.md             # Phase 2 implementation plan
+│   └── INPUT-VALIDATION-PLAN-v2.md # Phase 2.5 implementation plan
+├── .github/workflows/cli-test.yml # GitHub Actions configuration
+├── .gitlab-ci.yml                 # GitLab CI configuration
+├── sample-tests/demo.bats         # Sample tests
+├── sample-reports/                # Sample report output
+└── README.md                      # This file
 ```
 
 ---
-
