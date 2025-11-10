@@ -94,9 +94,9 @@ jobs:
           echo "Analyzing curl at $CURL_PATH..."
           $BASH_CMD core/cli-analyzer.sh "$CURL_PATH" curl-analysis.json
 
-          # Generate comprehensive tests for curl
+          # Generate tests for curl (exclude directory-traversal as curl is not a directory traversal tool)
           echo "Generating tests for curl..."
-          $BASH_CMD core/test-generator.sh curl-analysis.json generated-tests all
+          $BASH_CMD core/test-generator.sh curl-analysis.json generated-tests basic,help,security,path,multi-shell,input-validation,destructive-ops,performance
 
           # Show generated test files
           echo "Generated test files:"
