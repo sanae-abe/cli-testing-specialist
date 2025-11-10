@@ -65,6 +65,11 @@ Coverage Options (Phase 2):
   -c, --coverage          Enable coverage analysis and reporting
   --coverage-format FMT   Coverage report format: html|markdown|json|all (default: html)
 
+Profiling Options (Phase 2):
+  -p, --profile           Enable performance profiling
+  --baseline              Save performance baseline
+  --compare-baseline      Compare with saved baseline
+
 Examples:
   # Full workflow
   $0 /usr/bin/git
@@ -93,6 +98,15 @@ Examples:
   # Coverage with specific format
   $0 --coverage --coverage-format markdown /usr/bin/git
 
+  # Performance profiling
+  $0 --profile -o ./profile-tests /usr/bin/ls
+
+  # Profiling with baseline
+  $0 --profile --baseline /usr/bin/git
+
+  # Coverage + Profiling (combined)
+  $0 --coverage --profile /usr/bin/ls
+
 Workflow Steps:
   1. CLI Analysis    → {output}/analysis.json
   2. Test Generation → {output}/tests/*.bats
@@ -117,6 +131,9 @@ parse_arguments() {
     local docker_timeout=300
     local coverage_mode=false
     local coverage_format="html"
+    local profile_mode=false
+    local save_baseline=false
+    local compare_baseline=false
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -169,6 +186,18 @@ parse_arguments() {
                 coverage_format="$2"
                 shift 2
                 ;;
+            -p|--profile)
+                profile_mode=true
+                shift
+                ;;
+            --baseline)
+                save_baseline=true
+                shift
+                ;;
+            --compare-baseline)
+                compare_baseline=true
+                shift
+                ;;
             -h|--help)
                 show_usage
                 exit 0
@@ -206,6 +235,9 @@ parse_arguments() {
     export DOCKER_TIMEOUT="$docker_timeout"
     export COVERAGE_MODE="$coverage_mode"
     export COVERAGE_FORMAT="$coverage_format"
+    export PROFILE_MODE="$profile_mode"
+    export SAVE_BASELINE="$save_baseline"
+    export COMPARE_BASELINE="$compare_baseline"
 }
 
 # 出力ディレクトリ構造の作成
@@ -482,6 +514,72 @@ step_analyze_coverage() {
     return 0
 }
 
+# ステップ5: パフォーマンスプロファイリング（Phase 2）
+step_profile_execution() {
+    local output_dir="$1"
+    local cli_binary="$2"
+    local save_baseline="$3"
+    local compare_baseline="$4"
+
+    log INFO "=== Step 5: Performance Profiling (Phase 2) ==="
+
+    # プロファイルDB初期化
+    local profile_db="$output_dir/profiles.json"
+    local baseline_db="$output_dir/baselines.json"
+
+    bash "$CLI_TEST_ROOT/core/profiler.sh" init "$profile_db" || {
+        log ERROR "Failed to initialize profile database"
+        return 1
+    }
+
+    bash "$CLI_TEST_ROOT/core/baseline-manager.sh" init "$baseline_db" || {
+        log ERROR "Failed to initialize baseline database"
+        return 1
+    }
+
+    log INFO "Profiling command: $cli_binary"
+
+    # プロファイリング実行
+    local profile_result="$output_dir/profile-result.json"
+    bash "$CLI_TEST_ROOT/core/profiler.sh" profile "$cli_binary" "$profile_result" || {
+        log ERROR "Profiling failed"
+        return 1
+    }
+
+    log INFO "Profiling completed: $profile_result"
+
+    # ベースライン保存（--baselineオプション時）
+    if [[ "$save_baseline" == "true" ]]; then
+        log INFO "Saving performance baseline"
+        bash "$CLI_TEST_ROOT/core/baseline-manager.sh" save "$cli_binary" "$profile_result" "$baseline_db" || {
+            log WARN "Failed to save baseline (non-critical)"
+        }
+    fi
+
+    # ベースライン比較（--compare-baselineオプション時）
+    if [[ "$compare_baseline" == "true" ]]; then
+        log INFO "Comparing with baseline"
+        local comparison_result="$output_dir/baseline-comparison.json"
+        bash "$CLI_TEST_ROOT/core/baseline-manager.sh" compare "$cli_binary" "$profile_result" "$baseline_db" "$comparison_result" || {
+            log WARN "Baseline comparison failed (non-critical)"
+        }
+
+        # 回帰検出チェック
+        if [[ -f "$comparison_result" ]]; then
+            local regression_detected
+            regression_detected=$(jq -r '.comparison.regression_detected' "$comparison_result" 2>/dev/null || echo "false")
+
+            if [[ "$regression_detected" == "true" ]]; then
+                local diff_percent
+                diff_percent=$(jq -r '.comparison.wall_time_diff_percent' "$comparison_result")
+                log WARN "Performance regression detected: +${diff_percent}%"
+            fi
+        fi
+    fi
+
+    return 0
+}
+
 # メイン実行関数
 main() {
     log INFO "CLI Testing Specialist v$VERSION"
@@ -544,6 +642,13 @@ main() {
                 log WARN "Coverage analysis failed (non-critical)"
             }
         fi
+
+        # ステップ5: パフォーマンスプロファイリング（Phase 2）
+        if [[ "$PROFILE_MODE" == "true" ]]; then
+            step_profile_execution "$validated_output_dir" "$CLI_BINARY" "$SAVE_BASELINE" "$COMPARE_BASELINE" || {
+                log WARN "Performance profiling failed (non-critical)"
+            }
+        fi
     fi
 
     # 完了サマリー
@@ -565,6 +670,16 @@ main() {
             json) log INFO "  Coverage report: $validated_output_dir/reports/coverage-report.json" ;;
             all) log INFO "  Coverage reports: $validated_output_dir/reports/coverage-report.*" ;;
         esac
+    fi
+
+    if [[ "$PROFILE_MODE" == "true" ]]; then
+        log INFO "  Performance profile: $validated_output_dir/profile-result.json"
+        if [[ "$SAVE_BASELINE" == "true" ]]; then
+            log INFO "  Baseline saved: $validated_output_dir/baselines.json"
+        fi
+        if [[ "$COMPARE_BASELINE" == "true" ]]; then
+            log INFO "  Baseline comparison: $validated_output_dir/baseline-comparison.json"
+        fi
     fi
 
     if [[ $exit_code -eq 0 ]]; then
