@@ -52,3 +52,11 @@ test-analysis.json
 generated-tests/
 test-output/
 cli-test-output/
+
+# Integration test directories (Phase 2)
+*-integration-test/
+coverage-integration-test/
+profile-integration-test/
+baseline-integration-test/
+security-integration-test/
+combined-integration-test/

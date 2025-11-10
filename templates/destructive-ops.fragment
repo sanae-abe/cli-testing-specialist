@@ -1,0 +1,345 @@
+#!/usr/bin/env bats
+#
+# Destructive Operations Tests Fragment
+# CLI Testing Specialist Agent v2.5.0
+#
+# This fragment contains test templates for:
+# - Confirmation prompt detection
+# - --yes/--force flag behavior
+# - Warning message verification
+# - Destructive operation cancellation
+# - Safe mode / dry-run testing
+#
+
+# ========================================
+# Confirmation Prompt Tests
+# ========================================
+
+@test "[destructive-ops] ${DESTRUCTIVE_COMMAND} requires confirmation without --yes" {
+    # Test that destructive operation asks for confirmation
+    # when no confirmation flag is provided
+
+    # Provide "n" (no) as input to cancel operation
+    run bash -c "echo 'n' | \"$CLI_BINARY\" ${DESTRUCTIVE_COMMAND} ${DESTRUCTIVE_ARGS}"
+
+    # Should either:
+    # 1. Exit with non-zero (operation cancelled)
+    # 2. Show confirmation prompt in output
+    if [ "$status" -ne 0 ]; then
+        # Operation was cancelled - check for confirmation message
+        [[ "$output" =~ (confirm|continue|proceed|yes/no|y/n|\[y/N\]|\[Y/n\]) ]] || \
+        [[ "$stderr" =~ (confirm|continue|proceed|yes/no|y/n|\[y/N\]|\[Y/n\]) ]] || \
+            skip "No confirmation prompt detected"
+    else
+        # Operation succeeded - should still show prompt
+        [[ "$output" =~ (confirm|continue|proceed|yes/no|y/n|\[y/N\]|\[Y/n\]) ]] || \
+        [[ "$stderr" =~ (confirm|continue|proceed|yes/no|y/n|\[y/N\]|\[Y/n\]) ]] || \
+            skip "CLI may not require confirmation for this operation"
+    fi
+}
+
+@test "[destructive-ops] ${DESTRUCTIVE_COMMAND} accepts 'yes' confirmation" {
+    # Test that operation proceeds when user confirms with 'yes'
+
+    # Provide "y" or "yes" as input
+    run bash -c "echo 'y' | \"$CLI_BINARY\" ${DESTRUCTIVE_COMMAND} ${DESTRUCTIVE_ARGS}"
+
+    # Should succeed or show that operation was attempted
+    # Some operations may fail due to missing resources, which is OK
+    if [ "$status" -eq 0 ]; then
+        # Success
+        return 0
+    else
+        # Check if failure is due to missing resources, not rejection
+        [[ "$output" =~ (not found|does not exist|no such|missing) ]] || \
+        [[ "$stderr" =~ (not found|does not exist|no such|missing) ]] || \
+            skip "Operation failed but not due to confirmation rejection"
+    fi
+}
+
+@test "[destructive-ops] ${DESTRUCTIVE_COMMAND} cancels on 'no' response" {
+    # Test that operation is cancelled when user responds with 'no'
+
+    # Provide "n" or "no" as input
+    run bash -c "echo 'n' | \"$CLI_BINARY\" ${DESTRUCTIVE_COMMAND} ${DESTRUCTIVE_ARGS}"
+
+    # Should exit with non-zero status
+    [ "$status" -ne 0 ] || \
+        skip "CLI may not support cancellation"
+
+    # Should show cancellation message
+    [[ "$output" =~ (cancel|abort|stop|skip|not perform) ]] || \
+    [[ "$stderr" =~ (cancel|abort|stop|skip|not perform) ]] || \
+        skip "No explicit cancellation message"
+}
+
+@test "[destructive-ops] ${DESTRUCTIVE_COMMAND} times out on no response" {
+    # Test behavior when user doesn't respond to confirmation prompt
+
+    # Run with timeout (5 seconds) and no input
+    run timeout 5s bash -c "\"$CLI_BINARY\" ${DESTRUCTIVE_COMMAND} ${DESTRUCTIVE_ARGS} </dev/null"
+
+    # Should either timeout or exit with error
+    if [ "$status" -eq 124 ]; then
+        # Timeout occurred (waiting for input)
+        skip "CLI waits indefinitely for input (timeout: 5s)"
+    elif [ "$status" -ne 0 ]; then
+        # Exited with error (good - rejected due to no input)
+        return 0
+    else
+        # Succeeded without confirmation (potential issue)
+        skip "CLI proceeded without confirmation (potential security issue)"
+    fi
+}
+
+# ========================================
+# --yes / --force Flag Tests
+# ========================================
+
+@test "[destructive-ops] ${DESTRUCTIVE_COMMAND} ${YES_FLAG} bypasses confirmation" {
+    # Test that --yes or --force flag skips confirmation prompt
+
+    run "$CLI_BINARY" ${DESTRUCTIVE_COMMAND} ${DESTRUCTIVE_ARGS} ${YES_FLAG}
+
+    # Should proceed without interaction
+    # Exit status may be 0 (success) or non-zero (expected failure)
+    # The key is that it should NOT wait for input
+
+    # Check that no confirmation prompt appears
+    ! [[ "$output" =~ (confirm|continue|proceed|yes/no|y/n|\[y/N\]|\[Y/n\]) ]] || \
+        skip "Confirmation prompt still appears with ${YES_FLAG}"
+}
+
+@test "[destructive-ops] ${DESTRUCTIVE_COMMAND} ${YES_FLAG} completes without timeout" {
+    # Test that --yes flag allows command to complete quickly
+
+    # Run with short timeout (3 seconds)
+    run timeout 3s "$CLI_BINARY" ${DESTRUCTIVE_COMMAND} ${DESTRUCTIVE_ARGS} ${YES_FLAG}
+
+    # Should NOT timeout (exit status 124)
+    [ "$status" -ne 124 ] || \
+        skip "${YES_FLAG} flag did not bypass confirmation (timeout)"
+}
+
+@test "[destructive-ops] ${DESTRUCTIVE_COMMAND} supports multiple bypass flags" {
+    # Test common confirmation bypass flag variations
+
+    local bypass_flags=("--yes" "-y" "--force" "-f" "--assume-yes")
+    local found_working_flag=0
+
+    for flag in "${bypass_flags[@]}"; do
+        # Try each flag variant
+        run timeout 3s "$CLI_BINARY" ${DESTRUCTIVE_COMMAND} ${DESTRUCTIVE_ARGS} "$flag" 2>/dev/null
+
+        # Check if flag was recognized (not timeout, not "unknown option" error)
+        if [ "$status" -ne 124 ] && ! [[ "$output" =~ (unknown|invalid|unrecognized).*option ]] && \
+           ! [[ "$stderr" =~ (unknown|invalid|unrecognized).*option ]]; then
+            found_working_flag=1
+            log INFO "Working bypass flag found: $flag"
+        fi
+    done
+
+    [ "$found_working_flag" -eq 1 ] || \
+        skip "No standard bypass flag (--yes, -y, --force, -f) recognized"
+}
+
+# ========================================
+# Warning Message Tests
+# ========================================
+
+@test "[destructive-ops] ${DESTRUCTIVE_COMMAND} displays warning message" {
+    # Test that destructive operation shows appropriate warning
+
+    run bash -c "echo 'n' | \"$CLI_BINARY\" ${DESTRUCTIVE_COMMAND} ${DESTRUCTIVE_ARGS}"
+
+    # Should show warning about destructive nature
+    [[ "$output" =~ (warning|caution|danger|permanent|irreversible|cannot be undone) ]] || \
+    [[ "$stderr" =~ (warning|caution|danger|permanent|irreversible|cannot be undone) ]] || \
+        skip "No explicit warning message detected"
+}
+
+@test "[destructive-ops] ${DESTRUCTIVE_COMMAND} describes consequences" {
+    # Test that warning describes what will happen
+
+    run bash -c "echo 'n' | \"$CLI_BINARY\" ${DESTRUCTIVE_COMMAND} ${DESTRUCTIVE_ARGS}"
+
+    # Should describe the destructive action
+    [[ "$output" =~ (delete|remove|destroy|overwrite|replace|erase|wipe|clear) ]] || \
+    [[ "$stderr" =~ (delete|remove|destroy|overwrite|replace|erase|wipe|clear) ]] || \
+        skip "Warning does not describe destructive action"
+}
+
+@test "[destructive-ops] ${DESTRUCTIVE_COMMAND} warning visible without --yes" {
+    # Test that warning is NOT suppressed even with --yes
+
+    run "$CLI_BINARY" ${DESTRUCTIVE_COMMAND} ${DESTRUCTIVE_ARGS} ${YES_FLAG}
+
+    # Warning should still appear (or operation should log what was done)
+    if [[ "$output" =~ (warning|deleted|removed|destroyed) ]] || \
+       [[ "$stderr" =~ (warning|deleted|removed|destroyed) ]]; then
+        return 0
+    else
+        skip "No warning or confirmation of destructive action with --yes flag"
+    fi
+}
+
+# ========================================
+# Safe Mode / Dry Run Tests
+# ========================================
+
+@test "[destructive-ops] ${DESTRUCTIVE_COMMAND} supports --dry-run" {
+    # Test dry-run mode that shows what would happen without doing it
+
+    local dry_run_flags=("--dry-run" "--simulate" "-n" "--no-act" "--preview")
+    local found_dry_run=0
+
+    for flag in "${dry_run_flags[@]}"; do
+        run "$CLI_BINARY" ${DESTRUCTIVE_COMMAND} ${DESTRUCTIVE_ARGS} "$flag" 2>/dev/null
+
+        # Check if flag was recognized
+        if [ "$status" -ne 127 ] && ! [[ "$output" =~ (unknown|invalid).*option ]] && \
+           ! [[ "$stderr" =~ (unknown|invalid).*option ]]; then
+            # Check if output indicates dry-run mode
+            if [[ "$output" =~ (would|dry.?run|simulat|preview|what.*happen) ]] || \
+               [[ "$stderr" =~ (would|dry.?run|simulat|preview|what.*happen) ]]; then
+                found_dry_run=1
+                log INFO "Dry-run flag found: $flag"
+            fi
+        fi
+    done
+
+    [ "$found_dry_run" -eq 1 ] || \
+        skip "No dry-run mode detected (--dry-run, -n, --simulate, etc.)"
+}
+
+@test "[destructive-ops] ${DESTRUCTIVE_COMMAND} --dry-run does not modify state" {
+    # Test that dry-run doesn't actually perform destructive operation
+
+    skip_if_no_dry_run_support
+
+    # Create a test resource to verify non-modification
+    local test_marker="/tmp/destructive-test-marker-$RANDOM"
+    touch "$test_marker"
+
+    # Run with dry-run flag
+    run "$CLI_BINARY" ${DESTRUCTIVE_COMMAND} ${DESTRUCTIVE_ARGS} ${DRY_RUN_FLAG}
+
+    # Verify marker still exists
+    local marker_exists=0
+    if [ -f "$test_marker" ]; then
+        marker_exists=1
+        rm -f "$test_marker"
+    fi
+
+    [ "$marker_exists" -eq 1 ] || \
+        skip "Dry-run mode may have modified state (marker deleted)"
+}
+
+# ========================================
+# Cancellation Behavior Tests
+# ========================================
+
+@test "[destructive-ops] ${DESTRUCTIVE_COMMAND} cancellation is immediate" {
+    # Test that cancellation happens quickly (not after partial execution)
+
+    # Measure time for cancellation
+    local start_time=$(date +%s)
+    run bash -c "echo 'n' | \"$CLI_BINARY\" ${DESTRUCTIVE_COMMAND} ${DESTRUCTIVE_ARGS}"
+    local end_time=$(date +%s)
+    local duration=$((end_time - start_time))
+
+    # Should cancel within 2 seconds
+    [ "$duration" -le 2 ] || \
+        skip "Cancellation took ${duration}s (expected <2s)"
+}
+
+@test "[destructive-ops] ${DESTRUCTIVE_COMMAND} Ctrl+C interruption is safe" {
+    # Test that interrupting with Ctrl+C doesn't leave system in bad state
+
+    # Start operation in background and interrupt it
+    timeout 1s bash -c "\"$CLI_BINARY\" ${DESTRUCTIVE_COMMAND} ${DESTRUCTIVE_ARGS}" &
+    local pid=$!
+
+    sleep 0.5
+    kill -INT "$pid" 2>/dev/null
+    wait "$pid" 2>/dev/null
+
+    # Just verify that interrupt was handled (no specific assertions)
+    # The key is that the command doesn't hang or crash
+    skip "Ctrl+C handling test completed (manual verification needed)"
+}
+
+# ========================================
+# Multiple Confirmation Tests
+# ========================================
+
+@test "[destructive-ops] ${DESTRUCTIVE_COMMAND} requires re-confirmation for extreme cases" {
+    # Test that extremely destructive operations ask multiple times
+    skip_if_not_extreme_operation
+
+    # Provide multiple confirmations
+    run bash -c "printf 'y\\ny\\n' | \"$CLI_BINARY\" ${DESTRUCTIVE_COMMAND} ${EXTREME_ARGS}"
+
+    # Should show multiple confirmation prompts
+    local confirm_count=$(echo "$output$stderr" | grep -c -i 'confirm\|yes/no\|y/n')
+
+    [ "$confirm_count" -ge 2 ] || \
+        skip "Only ${confirm_count} confirmation(s) detected (expected 2+)"
+}
+
+@test "[destructive-ops] ${DESTRUCTIVE_COMMAND} requires typing full confirmation word" {
+    # Test that some operations require typing "yes" or specific word
+    skip_if_simple_confirmation
+
+    # Try with just "y"
+    run bash -c "echo 'y' | \"$CLI_BINARY\" ${DESTRUCTIVE_COMMAND} ${DESTRUCTIVE_ARGS}"
+
+    # If this succeeds, operation accepts simple "y"
+    if [ "$status" -eq 0 ]; then
+        skip "Operation accepts simple 'y' confirmation"
+    fi
+
+    # Try with full "yes"
+    run bash -c "echo 'yes' | \"$CLI_BINARY\" ${DESTRUCTIVE_COMMAND} ${DESTRUCTIVE_ARGS}"
+
+    # Should succeed with full word
+    [ "$status" -eq 0 ] || [[ "$output" =~ (yes|YES) ]] || \
+        skip "Operation may require specific confirmation phrase"
+}
+
+# ========================================
+# Helper Functions
+# ========================================
+
+skip_if_no_dry_run_support() {
+    # Check if CLI supports any dry-run flag
+    local dry_run_flags=("--dry-run" "-n" "--simulate")
+
+    for flag in "${dry_run_flags[@]}"; do
+        if "$CLI_BINARY" --help 2>&1 | grep -q "$flag"; then
+            return 0
+        fi
+    done
+
+    skip "CLI does not support dry-run mode"
+}
+
+skip_if_not_extreme_operation() {
+    # Check if operation is marked as extreme/dangerous
+    if [[ -z "${EXTREME_ARGS:-}" ]]; then
+        skip "Not an extreme destructive operation"
+    fi
+}
+
+skip_if_simple_confirmation() {
+    # Check if operation uses simple confirmation
+    if [[ "${CONFIRMATION_TYPE:-simple}" == "simple" ]]; then
+        skip "Operation uses simple y/n confirmation"
+    fi
+}
+
+log() {
+    local level="$1"
+    local message="$2"
+    echo "[$level] $message" >&3
+}

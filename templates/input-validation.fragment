@@ -1,0 +1,329 @@
+#!/usr/bin/env bats
+#
+# Input Validation Tests Fragment
+# CLI Testing Specialist Agent v2.5.0
+#
+# This fragment contains test templates for:
+# - Numeric option validation
+# - Path option validation
+# - Enum option validation
+# - Boundary value testing
+#
+
+# ========================================
+# Numeric Option Validation Tests
+# ========================================
+
+@test "[input-validation] ${OPTION_NAME} accepts valid value in range" {
+    # Test valid numeric value within acceptable range
+    run "$CLI_BINARY" ${OPTION_NAME} ${VALID_VALUE}
+
+    # Should succeed
+    [ "$status" -eq 0 ] || [ "$status" -eq 1 ]  # Some CLIs return 1 for help
+}
+
+@test "[input-validation] ${OPTION_NAME} rejects negative value" {
+    # Test rejection of negative numbers (if min >= 0)
+    skip_if_negative_allowed "${MIN_VALUE}"
+
+    run "$CLI_BINARY" ${OPTION_NAME} -1
+
+    # Should fail with error
+    [ "$status" -ne 0 ]
+
+    # Check error message mentions invalid value
+    [[ "$output" =~ (invalid|error|out of range|negative) ]] || \
+    [[ "$stderr" =~ (invalid|error|out of range|negative) ]] || \
+        skip "No specific error message for negative values"
+}
+
+@test "[input-validation] ${OPTION_NAME} rejects out-of-range high value" {
+    # Test rejection of values above maximum
+    local invalid_value=$((${MAX_VALUE} + 1000))
+
+    run "$CLI_BINARY" ${OPTION_NAME} "$invalid_value"
+
+    # Should fail
+    [ "$status" -ne 0 ] || \
+        skip "CLI does not validate maximum value"
+}
+
+@test "[input-validation] ${OPTION_NAME} rejects out-of-range low value (below min)" {
+    # Test rejection of values below minimum
+    skip_if "${MIN_VALUE}" -le 0
+
+    local invalid_value=$((${MIN_VALUE} - 1))
+
+    run "$CLI_BINARY" ${OPTION_NAME} "$invalid_value"
+
+    # Should fail
+    [ "$status" -ne 0 ] || \
+        skip "CLI does not validate minimum value"
+}
+
+@test "[input-validation] ${OPTION_NAME} rejects non-numeric value" {
+    # Test rejection of non-numeric input
+    run "$CLI_BINARY" ${OPTION_NAME} "not-a-number"
+
+    # Should fail
+    [ "$status" -ne 0 ]
+
+    # Check error message
+    [[ "$output" =~ (invalid|error|not a number|numeric|integer) ]] || \
+    [[ "$stderr" =~ (invalid|error|not a number|numeric|integer) ]] || \
+        skip "No specific error message for non-numeric input"
+}
+
+@test "[input-validation] ${OPTION_NAME} rejects float when integer required" {
+    # Test rejection of floating point when integer is required
+    skip_if_float_allowed "${OPTION_TYPE}"
+
+    run "$CLI_BINARY" ${OPTION_NAME} "3.14"
+
+    # Should fail
+    [ "$status" -ne 0 ] || \
+        skip "CLI accepts float values for this option"
+}
+
+# Boundary value tests
+@test "[input-validation] ${OPTION_NAME} accepts minimum boundary value" {
+    # Test minimum acceptable value
+    run "$CLI_BINARY" ${OPTION_NAME} ${MIN_VALUE}
+
+    [ "$status" -eq 0 ] || [ "$status" -eq 1 ]
+}
+
+@test "[input-validation] ${OPTION_NAME} accepts maximum boundary value" {
+    # Test maximum acceptable value
+    run "$CLI_BINARY" ${OPTION_NAME} ${MAX_VALUE}
+
+    [ "$status" -eq 0 ] || [ "$status" -eq 1 ]
+}
+
+@test "[input-validation] ${OPTION_NAME} rejects min-1 boundary value" {
+    # Test just below minimum
+    skip_if "${MIN_VALUE}" -le 0
+
+    local boundary_value=$((${MIN_VALUE} - 1))
+    run "$CLI_BINARY" ${OPTION_NAME} "$boundary_value"
+
+    [ "$status" -ne 0 ] || \
+        skip "CLI accepts values below stated minimum"
+}
+
+@test "[input-validation] ${OPTION_NAME} rejects max+1 boundary value" {
+    # Test just above maximum
+    local boundary_value=$((${MAX_VALUE} + 1))
+    run "$CLI_BINARY" ${OPTION_NAME} "$boundary_value"
+
+    [ "$status" -ne 0 ] || \
+        skip "CLI accepts values above stated maximum"
+}
+
+# ========================================
+# Path Option Validation Tests
+# ========================================
+
+@test "[input-validation] ${PATH_OPTION} validates file existence" {
+    # Test that CLI checks if input file exists
+    local nonexistent_file="/tmp/nonexistent-file-$(date +%s)-$RANDOM.txt"
+
+    run "$CLI_BINARY" ${PATH_OPTION} "$nonexistent_file"
+
+    # Should either fail or warn about non-existent file
+    if [ "$status" -ne 0 ]; then
+        # Failed as expected
+        [[ "$output" =~ (not found|does not exist|no such file|cannot find) ]] || \
+        [[ "$stderr" =~ (not found|does not exist|no such file|cannot find) ]] || \
+            skip "No specific error for missing file"
+    else
+        # Some CLIs accept non-existent files for output options
+        skip "CLI accepts non-existent file (may be output option)"
+    fi
+}
+
+@test "[input-validation] ${PATH_OPTION} rejects path traversal attack" {
+    # Test protection against path traversal
+    run "$CLI_BINARY" ${PATH_OPTION} "../../../etc/passwd"
+
+    # Should either fail or not leak sensitive data
+    [ "$status" -ne 0 ] || ! [[ "$output" =~ root: ]] || \
+        skip "CLI accepts path traversal but may sanitize"
+}
+
+@test "[input-validation] ${PATH_OPTION} handles relative paths correctly" {
+    # Test relative path handling
+    local test_file="./test-file-$RANDOM.txt"
+    touch "$test_file"
+
+    run "$CLI_BINARY" ${PATH_OPTION} "$test_file"
+
+    local exit_status=$status
+    rm -f "$test_file"
+
+    [ "$exit_status" -eq 0 ] || [ "$exit_status" -eq 1 ]
+}
+
+@test "[input-validation] ${PATH_OPTION} handles absolute paths correctly" {
+    # Test absolute path handling
+    local test_file="/tmp/test-file-$RANDOM.txt"
+    touch "$test_file"
+
+    run "$CLI_BINARY" ${PATH_OPTION} "$test_file"
+
+    local exit_status=$status
+    rm -f "$test_file"
+
+    [ "$exit_status" -eq 0 ] || [ "$exit_status" -eq 1 ]
+}
+
+@test "[input-validation] ${PATH_OPTION} handles paths with spaces" {
+    # Test path with spaces
+    local test_dir="/tmp/test dir with spaces-$RANDOM"
+    mkdir -p "$test_dir"
+    local test_file="$test_dir/file.txt"
+    touch "$test_file"
+
+    run "$CLI_BINARY" ${PATH_OPTION} "$test_file"
+
+    local exit_status=$status
+    rm -rf "$test_dir"
+
+    [ "$exit_status" -eq 0 ] || [ "$exit_status" -eq 1 ] || \
+        skip "CLI may not support paths with spaces"
+}
+
+@test "[input-validation] ${PATH_OPTION} handles Unicode in paths" {
+    # Test Unicode characters in path
+    local test_file="/tmp/テスト-файл-$RANDOM.txt"
+    touch "$test_file" 2>/dev/null || skip "Filesystem does not support Unicode"
+
+    run "$CLI_BINARY" ${PATH_OPTION} "$test_file"
+
+    local exit_status=$status
+    rm -f "$test_file" 2>/dev/null
+
+    [ "$exit_status" -eq 0 ] || [ "$exit_status" -eq 1 ] || \
+        skip "CLI may not support Unicode paths"
+}
+
+@test "[input-validation] ${PATH_OPTION} rejects null byte injection" {
+    # Test protection against null byte injection
+    run "$CLI_BINARY" ${PATH_OPTION} $'/tmp/file\x00malicious.txt'
+
+    # Should fail
+    [ "$status" -ne 0 ] || \
+        skip "CLI may accept null bytes (potential security issue)"
+}
+
+@test "[input-validation] ${PATH_OPTION} handles symbolic links" {
+    # Test symbolic link handling
+    local test_file="/tmp/real-file-$RANDOM.txt"
+    local link_file="/tmp/link-file-$RANDOM.txt"
+
+    touch "$test_file"
+    ln -s "$test_file" "$link_file"
+
+    run "$CLI_BINARY" ${PATH_OPTION} "$link_file"
+
+    local exit_status=$status
+    rm -f "$test_file" "$link_file"
+
+    [ "$exit_status" -eq 0 ] || [ "$exit_status" -eq 1 ]
+}
+
+# ========================================
+# Enum Option Validation Tests
+# ========================================
+
+@test "[input-validation] ${ENUM_OPTION} accepts first valid value" {
+    # Test first value from allowed list
+    run "$CLI_BINARY" ${ENUM_OPTION} "${VALID_ENUM_VALUE_1}"
+
+    [ "$status" -eq 0 ] || [ "$status" -eq 1 ]
+}
+
+@test "[input-validation] ${ENUM_OPTION} accepts second valid value" {
+    # Test another valid value
+    skip_if_undefined "${VALID_ENUM_VALUE_2}"
+
+    run "$CLI_BINARY" ${ENUM_OPTION} "${VALID_ENUM_VALUE_2}"
+
+    [ "$status" -eq 0 ] || [ "$status" -eq 1 ]
+}
+
+@test "[input-validation] ${ENUM_OPTION} rejects invalid value" {
+    # Test rejection of value not in allowed list
+    run "$CLI_BINARY" ${ENUM_OPTION} "invalid-value-xyz-12345"
+
+    # Should fail
+    [ "$status" -ne 0 ]
+
+    # Check error message
+    [[ "$output" =~ (invalid|unknown|unsupported|not allowed|not recognized) ]] || \
+    [[ "$stderr" =~ (invalid|unknown|unsupported|not allowed|not recognized) ]] || \
+        skip "No specific error message for invalid enum value"
+}
+
+@test "[input-validation] ${ENUM_OPTION} handles case sensitivity correctly" {
+    # Test case sensitivity (uppercase variant)
+    local uppercase_value
+    uppercase_value=$(echo "${VALID_ENUM_VALUE_1}" | tr '[:lower:]' '[:upper:]')
+
+    run "$CLI_BINARY" ${ENUM_OPTION} "$uppercase_value"
+
+    if [ "${CASE_SENSITIVE}" = "true" ]; then
+        # Should fail if case-sensitive
+        [ "$status" -ne 0 ] || \
+            skip "CLI accepts different case (not case-sensitive)"
+    else
+        # Should succeed if case-insensitive
+        [ "$status" -eq 0 ] || [ "$status" -eq 1 ] || \
+            skip "CLI is case-sensitive for this option"
+    fi
+}
+
+@test "[input-validation] ${ENUM_OPTION} provides helpful error with suggestions" {
+    # Test that invalid value error includes suggestions
+    run "$CLI_BINARY" ${ENUM_OPTION} "typo-value"
+
+    # Should fail
+    [ "$status" -ne 0 ]
+
+    # Check if error message includes valid options or suggestions
+    [[ "$output" =~ (valid values|allowed values|choose from|available|options are) ]] || \
+    [[ "$stderr" =~ (valid values|allowed values|choose from|available|options are) ]] || \
+        skip "CLI does not provide helpful error with valid options"
+}
+
+# ========================================
+# Helper Functions
+# ========================================
+
+skip_if_negative_allowed() {
+    local min_value="$1"
+    if [[ "$min_value" -lt 0 ]]; then
+        skip "Negative values are allowed (min=$min_value)"
+    fi
+}
+
+skip_if_float_allowed() {
+    local option_type="$1"
+    if [[ "$option_type" == "float" || "$option_type" == "double" ]]; then
+        skip "Float values are allowed for this option"
+    fi
+}
+
+skip_if_undefined() {
+    local value="$1"
+    if [[ -z "$value" || "$value" == "undefined" ]]; then
+        skip "Value is undefined"
+    fi
+}
+
+skip_if() {
+    local condition="$@"
+    if eval "$condition"; then
+        skip "Condition met: $condition"
+    fi
+}

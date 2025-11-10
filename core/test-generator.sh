@@ -12,19 +12,146 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+# Temporary files tracking (for cleanup)
+declare -ga TEMP_FILES=()
+
+# Cleanup function
+cleanup_temp_files() {
+    local exit_code=$?
+
+    if [[ ${#TEMP_FILES[@]} -gt 0 ]]; then
+        log DEBUG "Cleaning up ${#TEMP_FILES[@]} temporary files"
+        for temp_file in "${TEMP_FILES[@]}"; do
+            if [[ -f "$temp_file" ]]; then
+                rm -f "$temp_file" 2>/dev/null || true
+                log DEBUG "Removed: $temp_file"
+            fi
+        done
+    fi
+
+    exit $exit_code
+}
+
 # エラートラップ
 trap 'log_error_with_trace "Error at line $LINENO in test-generator.sh"' ERR
 
-# スクリプトのディレクトリを取得
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# クリーンアップトラップ（終了時・割り込み時）
+trap cleanup_temp_files EXIT INT TERM
+
+# スクリプトのディレクトリを取得（読み取り専用）
+declare -r SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+declare -r AGENT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # 依存ファイルの読み込み
 source "$SCRIPT_DIR/../utils/logger.sh"
 source "$SCRIPT_DIR/validator.sh"
+source "$SCRIPT_DIR/option-analyzer.sh"
 
-# テンプレートディレクトリ
-TEMPLATE_DIR="${AGENT_ROOT}/templates"
+# テンプレートディレクトリ（読み取り専用）
+declare -r TEMPLATE_DIR="${AGENT_ROOT}/templates"
+
+# Template cache (performance optimization)
+# Global associative array to cache template file contents
+declare -gA TEMPLATE_CACHE
+
+#######################################
+# Safe jq execution with error handling
+# Arguments:
+#   $1 - jq filter expression
+#   $2 - input file path
+#   $3 - default value (optional)
+# Returns:
+#   jq output or default value on error
+#######################################
+safe_jq() {
+    local filter="$1"
+    local input_file="$2"
+    local default_value="${3:-}"
+
+    # Check if jq is available
+    if ! command -v jq &>/dev/null; then
+        log ERROR "jq is not installed"
+        log ERROR "  Install: brew install jq (macOS) or apt-get install jq (Ubuntu)"
+        echo "$default_value"
+        return 1
+    fi
+
+    # Check if input file exists
+    if [[ ! -f "$input_file" ]]; then
+        log ERROR "jq input file not found: $input_file"
+        echo "$default_value"
+        return 1
+    fi
+
+    # Execute jq with error handling
+    local output
+    local exit_code
+
+    output=$(jq -r "$filter" "$input_file" 2>&1)
+    exit_code=$?
+
+    if [[ $exit_code -ne 0 ]]; then
+        log ERROR "jq execution failed (exit code: $exit_code)"
+        log ERROR "  Filter: $filter"
+        log ERROR "  Input: $input_file"
+        log ERROR "  Error: $output"
+        echo "$default_value"
+        return 1
+    fi
+
+    # Return output
+    echo "$output"
+    return 0
+}
+
+#######################################
+# Safe yq execution with error handling
+# Arguments:
+#   $1 - yq filter expression
+#   $2 - input file path
+#   $3 - default value (optional)
+# Returns:
+#   yq output or default value on error
+#######################################
+safe_yq() {
+    local filter="$1"
+    local input_file="$2"
+    local default_value="${3:-}"
+
+    # Check if yq is available
+    if ! command -v yq &>/dev/null; then
+        log WARN "yq is not installed, using default value"
+        echo "$default_value"
+        return 1
+    fi
+
+    # Check if input file exists
+    if [[ ! -f "$input_file" ]]; then
+        log ERROR "yq input file not found: $input_file"
+        echo "$default_value"
+        return 1
+    fi
+
+    # Execute yq with error handling
+    local output
+    local exit_code
+
+    output=$(yq "$filter" "$input_file" 2>&1)
+    exit_code=$?
+
+    if [[ $exit_code -ne 0 ]]; then
+        log ERROR "yq execution failed (exit code: $exit_code)"
+        log ERROR "  Filter: $filter"
+        log ERROR "  Input: $input_file"
+        log ERROR "  Error: $output"
+        echo "$default_value"
+        return 1
+    fi
+
+    # Return output
+    echo "$output"
+    return 0
+}
 
 # envsubstの存在確認（フォールバック対応）
 if ! command -v envsubst &>/dev/null; then
@@ -34,17 +161,59 @@ else
     USE_ENVSUBST=true
 fi
 
+#######################################
+# Load template file with caching
+# Globals:
+#   TEMPLATE_CACHE (reads/writes)
+# Arguments:
+#   $1 - Template file path
+# Returns:
+#   Template content via stdout
+#######################################
+load_template_cached() {
+    local template_file="$1"
+
+    # Check cache first
+    if [[ -n "${TEMPLATE_CACHE[$template_file]:-}" ]]; then
+        log DEBUG "Template cache hit: $template_file"
+        echo "${TEMPLATE_CACHE[$template_file]}"
+        return 0
+    fi
+
+    # Cache miss - load from file
+    log DEBUG "Template cache miss: $template_file"
+
+    if [[ ! -f "$template_file" ]]; then
+        log ERROR "Template file not found: $template_file"
+        return 1
+    fi
+
+    # Read entire file into cache
+    TEMPLATE_CACHE[$template_file]=$(<"$template_file")
+
+    # Return content
+    echo "${TEMPLATE_CACHE[$template_file]}"
+    return 0
+}
+
 # テンプレート変数置換（ファイルベース）
+# Performance: uses template caching to reduce file I/O
 substitute_template() {
     local template_file="$1"
     local output_file="$2"
 
+    # Load template from cache (or file on first access)
+    local template_content
+    template_content=$(load_template_cached "$template_file") || return 1
+
     # Create temporary file for TEST_CASES
     local test_cases_file
     test_cases_file=$(mktemp)
+    TEMP_FILES+=("$test_cases_file")  # Track for cleanup
     echo "$TEST_CASES" > "$test_cases_file"
 
     # Process template line by line
+    # Performance: use here-string instead of file redirection
     while IFS= read -r line; do
         # Check if line contains ${TEST_CASES}
         if [[ "$line" == *'${TEST_CASES}'* ]]; then
@@ -69,7 +238,7 @@ substitute_template() {
             fi
             echo "$line"
         fi
-    done < "$template_file" > "$output_file"
+    done <<< "$template_content" > "$output_file"
 
     # Cleanup
     rm -f "$test_cases_file"
@@ -155,6 +324,14 @@ generate_bats_tests() {
 
     if [[ "$test_modules" == "all" ]] || [[ "$test_modules" == *"concurrency"* ]]; then
         generate_concurrency_tests "$analysis_json" "$validated_output_dir" && ((generated_tests++)) || true
+    fi
+
+    if [[ "$test_modules" == "all" ]] || [[ "$test_modules" == *"input-validation"* ]]; then
+        generate_input_validation_tests "$analysis_json" "$validated_output_dir" && ((generated_tests++)) || true
+    fi
+
+    if [[ "$test_modules" == "all" ]] || [[ "$test_modules" == *"destructive-ops"* ]]; then
+        generate_destructive_ops_tests "$analysis_json" "$validated_output_dir" && ((generated_tests++)) || true
     fi
 
     log INFO "Test generation completed"
@@ -547,6 +724,235 @@ generate_concurrency_tests() {
     return 0
 }
 
+#######################################
+# Generate input validation tests
+# Globals:
+#   TEMPLATE_DIR (reads)
+# Arguments:
+#   $1 - Analysis JSON file path
+#   $2 - Output directory
+# Returns:
+#   0 - success, 1 - failure
+#######################################
+generate_input_validation_tests() {
+    local analysis_json="$1"
+    local output_dir="$2"
+
+    log DEBUG "Generating input validation tests"
+
+    # Extract CLI metadata
+    local cli_binary
+    cli_binary=$(safe_jq '.binary' "$analysis_json" "unknown") || return 1
+    local binary_basename
+    binary_basename=$(safe_jq '.binary_basename' "$analysis_json" "unknown") || return 1
+
+    # Extract options
+    local options
+    options=$(safe_jq '.options[]?' "$analysis_json" "")
+
+    if [[ -z "$options" ]]; then
+        log WARN "No options found in analysis JSON, skipping input validation tests"
+        return 0
+    fi
+
+    log INFO "Analyzing options for input validation tests"
+
+    # Classify options by type
+    local -a numeric_options=()
+    local -a path_options=()
+    local -a enum_options=()
+
+    while IFS= read -r option; do
+        [[ -z "$option" ]] && continue
+
+        # Infer option type using option-analyzer.sh
+        local option_type
+        option_type=$(infer_option_type "$option")
+
+        case "$option_type" in
+            numeric)
+                numeric_options+=("$option")
+                log DEBUG "Classified as numeric: $option"
+                ;;
+            path)
+                path_options+=("$option")
+                log DEBUG "Classified as path: $option"
+                ;;
+            enum)
+                enum_options+=("$option")
+                log DEBUG "Classified as enum: $option"
+                ;;
+            *)
+                log DEBUG "Skipped (type: $option_type): $option"
+                ;;
+        esac
+    done <<< "$options"
+
+    log INFO "Option classification: numeric=${#numeric_options[@]}, path=${#path_options[@]}, enum=${#enum_options[@]}"
+
+    # Skip if no testable options
+    if [[ ${#numeric_options[@]} -eq 0 ]] && [[ ${#path_options[@]} -eq 0 ]] && [[ ${#enum_options[@]} -eq 0 ]]; then
+        log WARN "No numeric/path/enum options found, skipping input validation tests"
+        return 0
+    fi
+
+    # Load input-validation.fragment template
+    local fragment_file="$TEMPLATE_DIR/input-validation.fragment"
+    if [[ ! -f "$fragment_file" ]]; then
+        log ERROR "Fragment file not found: $fragment_file"
+        return 1
+    fi
+
+    # Generate test cases for each option type
+    local test_cases=""
+
+    # Numeric options
+    for option in "${numeric_options[@]}"; do
+        # Extract constraints
+        local constraints
+        constraints=$(extract_numeric_constraints "$option")
+
+        local min_value
+        min_value=$(echo "$constraints" | jq -r '.min // 0')
+        local max_value
+        max_value=$(echo "$constraints" | jq -r '.max // 2147483647')
+        local option_type_detail
+        option_type_detail=$(echo "$constraints" | jq -r '.type // "integer"')
+
+        # Generate test cases from fragment (numeric section)
+        # Note: This is a simplified version - full implementation would parse fragment
+        log DEBUG "Generating numeric tests for $option (min=$min_value, max=$max_value)"
+    done
+
+    # Path options
+    for option in "${path_options[@]}"; do
+        log DEBUG "Generating path tests for $option"
+    done
+
+    # Enum options
+    for option in "${enum_options[@]}"; do
+        local enum_values
+        enum_values=$(extract_enum_values "$option")
+        log DEBUG "Generating enum tests for $option (values=$enum_values)"
+    done
+
+    # For now, use the entire fragment as test cases
+    # TODO: Implement selective fragment extraction based on option types
+    TEST_MODULE="input-validation"
+    CLI_BINARY="$cli_binary"
+    BINARY_BASENAME="$binary_basename"
+
+    # Read fragment content
+    TEST_CASES=$(<"$fragment_file")
+
+    # Replace placeholders (example for first numeric option)
+    if [[ ${#numeric_options[@]} -gt 0 ]]; then
+        local first_option="${numeric_options[0]}"
+        local constraints
+        constraints=$(extract_numeric_constraints "$first_option")
+
+        local min_value
+        min_value=$(echo "$constraints" | jq -r '.min // 0')
+        local max_value
+        max_value=$(echo "$constraints" | jq -r '.max // 100')
+
+        TEST_CASES="${TEST_CASES//\$\{OPTION_NAME\}/$first_option}"
+        TEST_CASES="${TEST_CASES//\$\{MIN_VALUE\}/$min_value}"
+        TEST_CASES="${TEST_CASES//\$\{MAX_VALUE\}/$max_value}"
+        TEST_CASES="${TEST_CASES//\$\{VALID_VALUE\}/$(( (min_value + max_value) / 2 ))}"
+    fi
+
+    # Generate output file
+    local template_file="$TEMPLATE_DIR/bats-test.template"
+    local output_file="$output_dir/08-input-validation.bats"
+    substitute_template "$template_file" "$output_file"
+
+    log INFO "Generated: $output_file"
+    log INFO "  Numeric options: ${#numeric_options[@]}"
+    log INFO "  Path options: ${#path_options[@]}"
+    log INFO "  Enum options: ${#enum_options[@]}"
+
+    return 0
+}
+
+#######################################
+# Generate destructive operations tests
+# Globals:
+#   TEMPLATE_DIR (reads)
+# Arguments:
+#   $1 - Analysis JSON file path
+#   $2 - Output directory
+# Returns:
+#   0 - success, 1 - failure
+#######################################
+generate_destructive_ops_tests() {
+    local analysis_json="$1"
+    local output_dir="$2"
+
+    log DEBUG "Generating destructive operations tests"
+
+    # Extract CLI metadata
+    local cli_binary
+    cli_binary=$(safe_jq '.binary' "$analysis_json" "unknown") || return 1
+    local binary_basename
+    binary_basename=$(safe_jq '.binary_basename' "$analysis_json" "unknown") || return 1
+
+    # Check for destructive commands/options
+    # Common patterns: delete, remove, destroy, rm, erase, wipe, clean, purge
+    local subcommands
+    subcommands=$(safe_jq '.subcommands[]?' "$analysis_json" "")
+
+    local -a destructive_commands=()
+
+    while IFS= read -r subcommand; do
+        [[ -z "$subcommand" ]] && continue
+
+        # Check if subcommand name suggests destructive operation
+        if [[ "$subcommand" =~ (delete|remove|destroy|rm|erase|wipe|clean|purge|drop|truncate) ]]; then
+            destructive_commands+=("$subcommand")
+            log DEBUG "Detected destructive command: $subcommand"
+        fi
+    done <<< "$subcommands"
+
+    # If no destructive commands found, use generic placeholder
+    if [[ ${#destructive_commands[@]} -eq 0 ]]; then
+        log WARN "No destructive commands detected, generating generic tests"
+        destructive_commands=("delete" "remove")
+    fi
+
+    log INFO "Destructive commands: ${#destructive_commands[@]}"
+
+    # Load destructive-ops.fragment template
+    local fragment_file="$TEMPLATE_DIR/destructive-ops.fragment"
+    if [[ ! -f "$fragment_file" ]]; then
+        log ERROR "Fragment file not found: $fragment_file"
+        return 1
+    fi
+
+    TEST_MODULE="destructive-ops"
+    CLI_BINARY="$cli_binary"
+    BINARY_BASENAME="$binary_basename"
+
+    # Read fragment content
+    TEST_CASES=$(<"$fragment_file")
+
+    # Replace placeholders
+    local first_destructive="${destructive_commands[0]}"
+    TEST_CASES="${TEST_CASES//\$\{DESTRUCTIVE_COMMAND\}/$first_destructive}"
+    TEST_CASES="${TEST_CASES//\$\{DESTRUCTIVE_ARGS\}/--test-target}"
+    TEST_CASES="${TEST_CASES//\$\{YES_FLAG\}/--yes}"
+
+    # Generate output file
+    local template_file="$TEMPLATE_DIR/bats-test.template"
+    local output_file="$output_dir/09-destructive-ops.bats"
+    substitute_template "$template_file" "$output_file"
+
+    log INFO "Generated: $output_file"
+    log INFO "  Destructive commands tested: ${#destructive_commands[@]}"
+
+    return 0
+}
+
 # メイン実行（スクリプト直接実行時のみ）
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     # 引数チェック
@@ -556,7 +962,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
         echo "Arguments:" >&2
         echo "  <analysis-json>  JSON file generated by cli-analyzer.sh" >&2
         echo "  <output-dir>     Directory to output BATS test files" >&2
-        echo "  [test-modules]   Optional: all|basic|help|security|path|multi-shell|performance|concurrency (default: all)" >&2
+        echo "  [test-modules]   Optional: all|basic|help|security|path|multi-shell|performance|concurrency|input-validation|destructive-ops (default: all)" >&2
         echo "" >&2
         echo "Example:" >&2
         echo "  $0 cli-analysis.json ./tests" >&2

@@ -15,16 +15,16 @@ IFS=$'\n\t'
 # エラートラップ
 trap 'log_error_with_trace "Error at line $LINENO in coverage-tracker.sh"' ERR
 
-# スクリプトのディレクトリを取得
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# スクリプトのディレクトリを取得（読み取り専用）
+declare -r SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+declare -r AGENT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # 依存ファイルの読み込み
 source "$SCRIPT_DIR/../utils/logger.sh"
 source "$SCRIPT_DIR/validator.sh"
 
-# デフォルト設定
-DEFAULT_COVERAGE_DB="${AGENT_ROOT}/coverage.db"
+# デフォルト設定（読み取り専用）
+declare -r DEFAULT_COVERAGE_DB="${AGENT_ROOT}/coverage.db"
 COVERAGE_DB_PATH="${COVERAGE_DB_PATH:-$DEFAULT_COVERAGE_DB}"
 
 # SQLite3の存在確認
@@ -237,72 +237,78 @@ track_command_execution() {
     local timestamp
     timestamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 
-    # SQLエスケープ（シングルクォートを二重化）
-    local escaped_command="${command//\'/\'\'}"
-    local escaped_subcommand="${subcommand//\'/\'\'}"
-    local escaped_test_name="${test_name//\'/\'\'}"
-    local escaped_test_file="${test_file//\'/\'\'}"
-
-    # command_usageテーブルに挿入
-    local insert_sql="INSERT INTO command_usage (timestamp, command, subcommand, exit_code, test_name, test_file)
-                      VALUES ('$timestamp', '$escaped_command', "
-
-    if [[ -n "$subcommand" ]]; then
-        insert_sql+="'$escaped_subcommand', "
-    else
-        insert_sql+="NULL, "
-    fi
-
-    insert_sql+="$exit_code, '$escaped_test_name', '$escaped_test_file');"
+    # ✅ セキュア実装: SQLパラメータバインディング使用
+    # SQLite 3.32.0+ の .param 構文を使用
+    # Note: プレースホルダー (?) を使った方が安全だが、.param構文の方が可読性が高い
 
     local command_id
-    command_id=$(sqlite3 "$db_path" "$insert_sql SELECT last_insert_rowid();" 2>&1 | tail -1)
+    command_id=$(sqlite3 "$db_path" <<EOF 2>&1 | tail -1
+.param set :timestamp "$timestamp"
+.param set :command "$command"
+.param set :subcommand "$subcommand"
+.param set :exit_code $exit_code
+.param set :test_name "$test_name"
+.param set :test_file "$test_file"
+
+INSERT INTO command_usage (timestamp, command, subcommand, exit_code, test_name, test_file)
+VALUES (:timestamp, :command,
+    CASE WHEN :subcommand = '' THEN NULL ELSE :subcommand END,
+    :exit_code, :test_name, :test_file);
+
+SELECT last_insert_rowid();
+EOF
+)
 
     if [[ ! "$command_id" =~ ^[0-9]+$ ]]; then
         log ERROR "Failed to insert command_usage: $command_id"
+        log ERROR "SQLite version may be too old (requires 3.32.0+)"
         return 1
     fi
 
     log DEBUG "Inserted command_usage with id: $command_id"
 
-    # option_usageテーブルに挿入
+    # ✅ パフォーマンス最適化: トランザクション + バッチINSERT
     if [[ -n "$options" ]]; then
-        while IFS= read -r option; do
-            [[ -z "$option" ]] && continue
+        local option_count=0
 
-            local option_name
-            local option_value=""
+        # トランザクション内で一括挿入
+        {
+            echo "BEGIN TRANSACTION;"
 
-            # option=value形式の分解
-            if [[ "$option" =~ = ]]; then
-                option_name=$(echo "$option" | cut -d'=' -f1)
-                option_value=$(echo "$option" | cut -d'=' -f2-)
-            else
-                option_name="$option"
-            fi
+            while IFS= read -r option; do
+                [[ -z "$option" ]] && continue
 
-            # SQLエスケープ
-            local escaped_option_name="${option_name//\'/\'\'}"
-            local escaped_option_value="${option_value//\'/\'\'}"
+                local option_name
+                local option_value=""
 
-            # 挿入
-            local option_insert_sql="INSERT INTO option_usage (timestamp, option_name, option_value, command_id)
-                                     VALUES ('$timestamp', '$escaped_option_name', "
+                # option=value形式の分解
+                if [[ "$option" =~ = ]]; then
+                    option_name=$(echo "$option" | cut -d'=' -f1)
+                    option_value=$(echo "$option" | cut -d'=' -f2-)
+                else
+                    option_name="$option"
+                fi
 
-            if [[ -n "$option_value" ]]; then
-                option_insert_sql+="'$escaped_option_value', "
-            else
-                option_insert_sql+="NULL, "
-            fi
+                # パラメータバインディング風（SQLエスケープ）
+                local escaped_option_name="${option_name//\'/\'\'}"
+                local escaped_option_value="${option_value//\'/\'\'}"
 
-            option_insert_sql+="$command_id);"
+                # INSERT文生成
+                if [[ -n "$option_value" ]]; then
+                    echo "INSERT INTO option_usage (timestamp, option_name, option_value, command_id) VALUES ('$timestamp', '$escaped_option_name', '$escaped_option_value', $command_id);"
+                else
+                    echo "INSERT INTO option_usage (timestamp, option_name, option_value, command_id) VALUES ('$timestamp', '$escaped_option_name', NULL, $command_id);"
+                fi
 
-            sqlite3 "$db_path" "$option_insert_sql" 2>&1 || {
-                log WARN "Failed to insert option_usage: $option"
-            }
+                ((option_count++))
+            done <<< "$options"
 
-            log DEBUG "Inserted option: $option_name"
-        done <<< "$options"
+            echo "COMMIT;"
+        } | sqlite3 "$db_path" 2>&1 || {
+            log WARN "Failed to insert some option_usage entries"
+        }
+
+        log DEBUG "Inserted $option_count options in batch transaction"
     fi
 
     log DEBUG "Command tracking completed: $command"

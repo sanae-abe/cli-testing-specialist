@@ -1,0 +1,199 @@
+# Option Type Inference Patterns
+# CLI Testing Specialist v2.5.0
+#
+# This file defines patterns for inferring the type of CLI options
+# based on their names and common conventions.
+#
+# Pattern matching is performed in priority order (higher priority first).
+
+patterns:
+  # Numeric type options (integers, floats)
+  - type: numeric
+    priority: 10
+    keywords:
+      # Port numbers
+      - port
+      - http-port
+      - https-port
+      - tcp-port
+      - udp-port
+      - socks-port
+      # Time-related
+      - timeout
+      - wait
+      - delay
+      - duration
+      - interval
+      - ttl
+      # Size/Limit values
+      - max
+      - min
+      - limit
+      - size
+      - length
+      - count
+      - num
+      - number
+      # Performance/Concurrency
+      - threads
+      - workers
+      - jobs
+      - concurrency
+      - parallelism
+      # Retry/Attempts
+      - retry
+      - retries
+      - attempts
+      - tries
+      # Buffer/Memory
+      - buffer
+      - cache
+      - memory
+      - heap
+      # Percentage/Ratio
+      - percentage
+      - percent
+      - ratio
+      - rate
+    description: "Numeric options (integers, floats, percentages)"
+    examples:
+      - "--port 8080"
+      - "--timeout 30"
+      - "--max-size 1024"
+      - "--threads 4"
+
+  # File/Directory path options
+  - type: path
+    priority: 9
+    keywords:
+      # General paths
+      - path
+      - file
+      - filename
+      - filepath
+      # Input/Output
+      - input
+      - output
+      - source
+      - dest
+      - destination
+      - target
+      # Directories
+      - dir
+      - directory
+      - folder
+      - workdir
+      - homedir
+      - rootdir
+      # Configuration/Data
+      - config
+      - configuration
+      - data
+      - datadir
+      # Security/Certificates
+      - cert
+      - certificate
+      - key
+      - keyfile
+      - ca
+      - ca-file
+      # Logs
+      - log
+      - logfile
+      - log-file
+    description: "File and directory path options"
+    examples:
+      - "--input /path/to/file.txt"
+      - "--config ~/.myapp/config.yaml"
+      - "--cert /etc/ssl/cert.pem"
+
+  # Enumeration (fixed value set) options
+  - type: enum
+    priority: 8
+    keywords:
+      # Format/Type
+      - format
+      - type
+      - kind
+      - variant
+      # Mode/Style
+      - mode
+      - style
+      - theme
+      - skin
+      # Language/Locale
+      - lang
+      - language
+      - locale
+      - encoding
+      # Level/Priority
+      - level
+      - priority
+      - severity
+      # Method/Algorithm
+      - method
+      - algorithm
+      - strategy
+      - policy
+      # Protocol
+      - protocol
+      - scheme
+    description: "Enumeration options with a fixed set of allowed values"
+    examples:
+      - "--format json"
+      - "--log-level debug"
+      - "--lang en"
+      - "--protocol https"
+
+  # Boolean flag options
+  - type: boolean
+    priority: 7
+    keywords:
+      # Verbosity
+      - verbose
+      - quiet
+      - silent
+      - debug
+      # Force/Confirm
+      - force
+      - yes
+      - no
+      - confirm
+      - interactive
+      # Enable/Disable
+      - enable
+      - disable
+      - allow
+      - deny
+      # Feature flags
+      - color
+      - colors
+      - progress
+      - watch
+      - follow
+      - recursive
+      # Dry-run/Test
+      - dry-run
+      - dryrun
+      - test
+      - simulate
+    description: "Boolean flag options (true/false, on/off)"
+    examples:
+      - "--verbose"
+      - "--force"
+      - "--dry-run"
+      - "--no-color"
+
+# Default type for unmatched options
+default_type: string
+
+# Inference settings
+settings:
+  # Case sensitivity for pattern matching
+  case_sensitive: false
+
+  # Whether to match partial keywords (e.g., "max" matches "max-size")
+  partial_match: true
+
+  # Minimum keyword length for partial matching
+  min_keyword_length: 3

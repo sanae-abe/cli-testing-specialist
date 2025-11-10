@@ -12,7 +12,10 @@
 set -euo pipefail
 
 # ロガーの読み込み
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# SCRIPT_DIRが未定義の場合のみ設定（sourceされた場合に対応）
+if [[ -z "${SCRIPT_DIR:-}" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
 source "$SCRIPT_DIR/../utils/logger.sh"
 
 # CLIバイナリ名のバリデーション

@@ -1,0 +1,310 @@
+# Enumeration Type Definitions
+# CLI Testing Specialist v2.5.0
+#
+# This file defines allowed values for enumeration-type options.
+
+enums:
+  # Output/Input formats
+  format:
+    aliases:
+      - format
+      - output-format
+      - input-format
+      - fmt
+    values:
+      - json
+      - xml
+      - yaml
+      - yml
+      - csv
+      - tsv
+      - html
+      - markdown
+      - md
+      - text
+      - txt
+      - plain
+    case_sensitive: false
+    description: "Data format specification"
+    examples:
+      valid: ["json", "XML", "yaml"]
+      invalid: ["invalid", "pdf", "doc"]
+
+  # Log levels
+  log_level:
+    aliases:
+      - log-level
+      - level
+      - loglevel
+      - verbosity
+    values:
+      - trace
+      - debug
+      - info
+      - warn
+      - warning
+      - error
+      - err
+      - fatal
+      - critical
+      - off
+    case_sensitive: false
+    description: "Logging verbosity level"
+    examples:
+      valid: ["debug", "INFO", "error"]
+      invalid: ["verbose", "log", "all"]
+
+  # Languages/Locales
+  language:
+    aliases:
+      - lang
+      - language
+      - locale
+    values:
+      - en
+      - en-US
+      - en-GB
+      - ja
+      - ja-JP
+      - es
+      - es-ES
+      - fr
+      - fr-FR
+      - de
+      - de-DE
+      - zh
+      - zh-CN
+      - zh-TW
+      - ko
+      - ko-KR
+      - it
+      - it-IT
+      - pt
+      - pt-BR
+      - ru
+      - ru-RU
+    case_sensitive: false
+    description: "Language/locale code (ISO 639-1 or BCP 47)"
+    examples:
+      valid: ["en", "ja", "en-US"]
+      invalid: ["english", "japanese", "xx"]
+
+  # Encoding
+  encoding:
+    aliases:
+      - encoding
+      - charset
+      - character-set
+    values:
+      - utf-8
+      - utf8
+      - utf-16
+      - utf16
+      - ascii
+      - iso-8859-1
+      - latin1
+      - shift-jis
+      - euc-jp
+      - gb2312
+      - big5
+    case_sensitive: false
+    description: "Character encoding"
+    examples:
+      valid: ["utf-8", "ASCII", "shift-jis"]
+      invalid: ["unknown", "utf", "unicode"]
+
+  # HTTP methods
+  http_method:
+    aliases:
+      - method
+      - http-method
+      - request-method
+    values:
+      - GET
+      - POST
+      - PUT
+      - PATCH
+      - DELETE
+      - HEAD
+      - OPTIONS
+      - TRACE
+      - CONNECT
+    case_sensitive: false
+    description: "HTTP request method"
+    examples:
+      valid: ["GET", "post", "DELETE"]
+      invalid: ["REMOVE", "FETCH", "SEND"]
+
+  # Protocols
+  protocol:
+    aliases:
+      - protocol
+      - scheme
+      - proto
+    values:
+      - http
+      - https
+      - ftp
+      - ftps
+      - ssh
+      - sftp
+      - tcp
+      - udp
+      - ws
+      - wss
+      - file
+    case_sensitive: false
+    description: "Network protocol"
+    examples:
+      valid: ["http", "HTTPS", "ssh"]
+      invalid: ["http2", "quic", "invalid"]
+
+  # Comparison operators
+  operator:
+    aliases:
+      - operator
+      - op
+      - comparison
+    values:
+      - eq
+      - ne
+      - gt
+      - gte
+      - ge
+      - lt
+      - lte
+      - le
+      - "="
+      - "!="
+      - ">"
+      - ">="
+      - "<"
+      - "<="
+    case_sensitive: true
+    description: "Comparison operator"
+    examples:
+      valid: ["eq", "!=", ">="]
+      invalid: ["equal", "not", "bigger"]
+
+  # Sort orders
+  sort_order:
+    aliases:
+      - sort
+      - order
+      - sort-order
+      - sort-by
+    values:
+      - asc
+      - ascending
+      - desc
+      - descending
+      - name
+      - size
+      - date
+      - time
+      - modified
+      - created
+    case_sensitive: false
+    description: "Sort order specification"
+    examples:
+      valid: ["asc", "DESC", "name"]
+      invalid: ["up", "down", "oldest"]
+
+  # Color modes
+  color:
+    aliases:
+      - color
+      - colors
+      - colour
+      - colours
+    values:
+      - auto
+      - always
+      - never
+      - on
+      - off
+      - true
+      - false
+      - yes
+      - no
+      - "0"
+      - "1"
+    case_sensitive: false
+    description: "Color output mode"
+    examples:
+      valid: ["auto", "always", "never"]
+      invalid: ["maybe", "sometimes", "enabled"]
+
+  # Boolean-like values
+  boolean:
+    aliases:
+      - bool
+      - boolean
+      - flag
+    values:
+      - true
+      - false
+      - yes
+      - no
+      - on
+      - off
+      - "1"
+      - "0"
+      - enabled
+      - disabled
+    case_sensitive: false
+    description: "Boolean value"
+    examples:
+      valid: ["true", "FALSE", "yes"]
+      invalid: ["ok", "nope", "maybe"]
+
+  # Output styles
+  style:
+    aliases:
+      - style
+      - theme
+      - skin
+    values:
+      - default
+      - minimal
+      - compact
+      - detailed
+      - verbose
+      - simple
+      - fancy
+      - plain
+      - colored
+      - monochrome
+    case_sensitive: false
+    description: "Output style/theme"
+    examples:
+      valid: ["default", "MINIMAL", "fancy"]
+      invalid: ["custom", "user", "special"]
+
+  # Compression algorithms
+  compression:
+    aliases:
+      - compression
+      - compress
+      - algorithm
+    values:
+      - none
+      - gzip
+      - gz
+      - bzip2
+      - bz2
+      - xz
+      - lz4
+      - zstd
+      - zip
+      - deflate
+    case_sensitive: false
+    description: "Compression algorithm"
+    examples:
+      valid: ["gzip", "BZIP2", "none"]
+      invalid: ["fast", "best", "max"]
+
+# Default enum behavior
+default_enum:
+  case_sensitive: false
+  allow_partial_match: false

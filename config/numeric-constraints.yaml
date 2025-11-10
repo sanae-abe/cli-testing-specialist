@@ -1,0 +1,224 @@
+# Numeric Option Constraints
+# CLI Testing Specialist v2.5.0
+#
+# This file defines constraints for numeric options including
+# min/max ranges, data types, and units.
+
+constraints:
+  # Port numbers (TCP/UDP)
+  port:
+    aliases:
+      - port
+      - http-port
+      - https-port
+      - tcp-port
+      - udp-port
+      - socks-port
+      - proxy-port
+    min: 1
+    max: 65535
+    type: integer
+    unit: null
+    description: "TCP/UDP port number (1-65535)"
+    examples:
+      valid: [80, 443, 8080, 3000]
+      invalid: [0, -1, 70000, "abc"]
+
+  # Timeout values (seconds)
+  timeout:
+    aliases:
+      - timeout
+      - wait
+      - delay
+      - duration
+    min: 0
+    max: 3600
+    type: integer
+    unit: "seconds"
+    description: "Timeout duration in seconds (0-3600)"
+    examples:
+      valid: [0, 30, 60, 300]
+      invalid: [-1, 4000, "infinite"]
+
+  # Interval values (seconds)
+  interval:
+    aliases:
+      - interval
+      - period
+      - frequency
+    min: 1
+    max: 86400  # 24 hours
+    type: integer
+    unit: "seconds"
+    description: "Interval duration in seconds (1-86400)"
+    examples:
+      valid: [1, 60, 3600]
+      invalid: [0, -5, 100000]
+
+  # TTL (Time To Live)
+  ttl:
+    aliases:
+      - ttl
+      - time-to-live
+    min: 1
+    max: 255
+    type: integer
+    unit: null
+    description: "Time To Live value (1-255)"
+    examples:
+      valid: [64, 128, 255]
+      invalid: [0, -1, 256]
+
+  # Percentage values
+  percentage:
+    aliases:
+      - percentage
+      - percent
+      - ratio
+    min: 0
+    max: 100
+    type: float
+    unit: "percent"
+    description: "Percentage value (0-100)"
+    examples:
+      valid: [0, 50, 100, 75.5]
+      invalid: [-1, 101, "50%"]
+
+  # Thread/Worker counts
+  threads:
+    aliases:
+      - threads
+      - workers
+      - jobs
+      - concurrency
+      - parallelism
+    min: 1
+    max: 256
+    type: integer
+    unit: null
+    description: "Number of threads/workers (1-256)"
+    examples:
+      valid: [1, 4, 8, 16]
+      invalid: [0, -1, 1000]
+
+  # Retry/Attempt counts
+  retry:
+    aliases:
+      - retry
+      - retries
+      - attempts
+      - tries
+    min: 0
+    max: 100
+    type: integer
+    unit: null
+    description: "Number of retry attempts (0-100)"
+    examples:
+      valid: [0, 3, 5, 10]
+      invalid: [-1, 200]
+
+  # Buffer/Cache sizes (bytes)
+  buffer_size:
+    aliases:
+      - buffer-size
+      - buffer
+      - chunk-size
+      - block-size
+      - cache-size
+    min: 512
+    max: 10485760  # 10MB
+    type: integer
+    unit: "bytes"
+    description: "Buffer/cache size in bytes (512B-10MB)"
+    examples:
+      valid: [1024, 4096, 65536]
+      invalid: [0, 100, 100000000]
+
+  # Memory/Heap sizes (MB)
+  memory_size:
+    aliases:
+      - memory
+      - mem
+      - heap
+      - heap-size
+      - max-memory
+    min: 64
+    max: 65536  # 64GB
+    type: integer
+    unit: "MB"
+    description: "Memory size in megabytes (64MB-64GB)"
+    examples:
+      valid: [128, 512, 1024, 2048]
+      invalid: [0, 32, 100000]
+
+  # File size limits (MB)
+  file_size:
+    aliases:
+      - max-size
+      - file-size
+      - limit
+      - size-limit
+    min: 1
+    max: 10240  # 10GB
+    type: integer
+    unit: "MB"
+    description: "File size limit in megabytes (1MB-10GB)"
+    examples:
+      valid: [1, 10, 100, 1000]
+      invalid: [0, -1, 20000]
+
+  # Connection limits
+  connections:
+    aliases:
+      - connections
+      - max-connections
+      - max-conn
+      - conn-limit
+    min: 1
+    max: 10000
+    type: integer
+    unit: null
+    description: "Maximum number of connections (1-10000)"
+    examples:
+      valid: [10, 100, 1000]
+      invalid: [0, -1, 20000]
+
+  # Rate limits (requests per second)
+  rate_limit:
+    aliases:
+      - rate
+      - rate-limit
+      - rps
+      - requests-per-second
+    min: 1
+    max: 100000
+    type: integer
+    unit: "req/s"
+    description: "Rate limit in requests per second (1-100000)"
+    examples:
+      valid: [10, 100, 1000]
+      invalid: [0, -1, 1000000]
+
+  # Queue/Batch sizes
+  batch_size:
+    aliases:
+      - batch
+      - batch-size
+      - queue-size
+      - bulk-size
+    min: 1
+    max: 10000
+    type: integer
+    unit: null
+    description: "Batch/queue size (1-10000)"
+    examples:
+      valid: [10, 100, 1000]
+      invalid: [0, -1, 20000]
+
+# Default constraints for unknown numeric options
+default_constraints:
+  min: 0
+  max: 2147483647  # INT_MAX (32-bit)
+  type: integer
+  unit: null
+  description: "Generic numeric value"
