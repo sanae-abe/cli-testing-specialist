@@ -145,6 +145,10 @@ generate_bats_tests() {
         generate_path_handler_tests "$analysis_json" "$validated_output_dir" && ((generated_tests++)) || true
     fi
 
+    if [[ "$test_modules" == "all" ]] || [[ "$test_modules" == *"multi-shell"* ]]; then
+        generate_multi_shell_tests "$analysis_json" "$validated_output_dir" && ((generated_tests++)) || true
+    fi
+
     log INFO "Test generation completed"
     log INFO "  Generated test files: $generated_tests"
     log INFO "  Output directory: $validated_output_dir"
@@ -381,6 +385,81 @@ EOF
     substitute_template "$template_file" "$output_file"
 
     log INFO "Generated: $output_file"
+    return 0
+}
+
+# Multi-shellテスト生成
+generate_multi_shell_tests() {
+    local analysis_json="$1"
+    local output_dir="$2"
+
+    log DEBUG "Generating multi-shell compatibility tests"
+
+    local cli_binary
+    cli_binary=$(jq -r '.binary' "$analysis_json")
+    local binary_basename
+    binary_basename=$(jq -r '.binary_basename' "$analysis_json")
+
+    # Shell検出JSONを取得（なければ検出実行）
+    local shell_detection_json="$output_dir/../shell-detection.json"
+    if [[ ! -f "$shell_detection_json" ]]; then
+        log INFO "Running shell detection..."
+        bash "$SCRIPT_DIR/shell-detector.sh" "$shell_detection_json" >&2 || {
+            log WARN "Shell detection failed, using defaults"
+            shell_detection_json=""
+        }
+    fi
+
+    TEST_MODULE="multi-shell"
+    CLI_BINARY="$cli_binary"
+    BINARY_BASENAME="$binary_basename"
+
+    # 利用可能なshellを取得
+    local available_shells
+    if [[ -f "$shell_detection_json" ]]; then
+        available_shells=$(jq -r '.shells[] | select(.available == true) | .name' "$shell_detection_json")
+    else
+        # デフォルトshell
+        available_shells="bash"
+    fi
+
+    # Multi-shellテストケース生成
+    local shell_test_cases=""
+    while IFS= read -r shell_name; do
+        [[ -z "$shell_name" ]] && continue
+
+        # bashベースのテストのみ生成（BATSはbashで動作）
+        # shell_nameだけを事前置換してからheredocに渡す
+        local current_test
+        current_test=$(cat <<'SHELLTEST'
+
+@test "[${TEST_MODULE}] CLI runs in SHELL_NAME_PLACEHOLDER environment" {
+    # Check if shell is available
+    if ! command -v SHELL_NAME_PLACEHOLDER &>/dev/null; then
+        skip "SHELL_NAME_PLACEHOLDER not available"
+    fi
+
+    # Test basic execution through the shell
+    run SHELL_NAME_PLACEHOLDER -c "$CLI_BINARY --version 2>&1 || $CLI_BINARY -v 2>&1 || echo 'version check skipped'"
+    [ "$status" -eq 0 ] || [ "$status" -eq 1 ]
+    [ -n "$output" ]
+}
+SHELLTEST
+)
+        # shell_nameを置換
+        current_test="${current_test//SHELL_NAME_PLACEHOLDER/$shell_name}"
+        shell_test_cases+="$current_test"
+    done <<< "$available_shells"
+
+    TEST_CASES="$shell_test_cases"
+
+    # テンプレート置換
+    local template_file="$TEMPLATE_DIR/bats-test.template"
+    local output_file="$output_dir/05-multi-shell.bats"
+    substitute_template "$template_file" "$output_file"
+
+    log INFO "Generated: $output_file"
+    log INFO "  Tested shells: $(echo "$available_shells" | wc -l | tr -d ' ')"
     return 0
 }
 

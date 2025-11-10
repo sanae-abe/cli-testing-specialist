@@ -171,6 +171,35 @@ setup_output_structure() {
     echo "$validated_dir"
 }
 
+# ステップ0: Shell検出
+step_detect_shells() {
+    local output_dir="$1"
+
+    log INFO "=== Step 0: Shell Detection ==="
+
+    # Shell検出が既に存在する場合はスキップ
+    if [[ -f "$output_dir/shell-detection.json" ]]; then
+        log INFO "Using existing shell detection: $output_dir/shell-detection.json"
+        return 0
+    fi
+
+    log INFO "Detecting available shells"
+
+    local detection_output
+    detection_output=$(bash "$CLI_TEST_ROOT/core/shell-detector.sh" "$output_dir/shell-detection.json" 2>&1) || {
+        log WARN "Shell detection failed (non-critical)"
+        log WARN "$detection_output"
+        return 0  # Non-critical, continue without shell detection
+    }
+
+    log INFO "Shell detection completed: $output_dir/shell-detection.json"
+
+    # 検出結果のサマリーを表示
+    local available_count
+    available_count=$(jq -r '.summary.available_shells' "$output_dir/shell-detection.json" 2>/dev/null || echo "unknown")
+    log INFO "  Available shells: $available_count"
+}
+
 # ステップ1: CLI解析
 step_analyze() {
     local cli_binary="$1"
@@ -294,6 +323,10 @@ main() {
             exit 1
         fi
     else
+        # ステップ0: Shell検出
+        step_detect_shells "$validated_output_dir" || exit_code=$?
+        # Shell detection failure is non-critical, continue
+
         # ステップ1: CLI解析
         step_analyze "$CLI_BINARY" "$validated_output_dir" || exit_code=$?
         [[ $exit_code -ne 0 ]] && exit $exit_code
