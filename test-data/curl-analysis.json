@@ -1,0 +1,21 @@
+{
+  "binary": "/usr/bin/curl",
+  "binary_basename": "curl",
+  "version": "8.4.0",
+  "subcommand_count": 0,
+  "option_count": 8,
+  "options": [
+    "--max-time",
+    "--connect-timeout",
+    "--retry",
+    "--output",
+    "--cookie",
+    "--user-agent",
+    "--header",
+    "--data"
+  ],
+  "subcommands": [],
+  "help_available": true,
+  "version_available": true,
+  "analyzed_at": "2025-11-10T14:06:00Z"
+}

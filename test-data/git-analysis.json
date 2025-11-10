@@ -1,0 +1,15 @@
+[2025-11-10 14:04:57] [INFO] Starting CLI tool analysis
+[2025-11-10 14:04:57] [WARN] Testing system binary: /usr/bin/git
+[2025-11-10 14:04:57] [WARN]   This may have security implications.
+[2025-11-10 14:04:57] [WARN]   Proceeding (CLI_TEST_ALLOW_SYSTEM_BINARIES=true)
+[2025-11-10 14:04:57] [INFO] Binary validation passed: /usr/bin/git
+[2025-11-10 14:04:57] [INFO] Analyzing CLI tool: /usr/bin/git
+[2025-11-10 14:04:57] [INFO] Detected 0 subcommands
+[2025-11-10 14:04:57] [INFO] Detected 0 options
+[2025-11-10 14:04:57] [INFO] Building command tree (max depth: 3)...
+[2025-11-10 14:04:57] [INFO] CLI analysis completed
+[2025-11-10 14:04:57] [INFO]   Subcommands: 0
+[2025-11-10 14:04:57] [INFO]   Options: 0
+[2025-11-10 14:04:57] [INFO]   Output: cli-analysis.json
+cli-analysis.json
+[2025-11-10 14:04:57] [INFO] Analysis completed successfully

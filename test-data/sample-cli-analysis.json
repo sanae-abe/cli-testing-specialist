@@ -1,0 +1,28 @@
+{
+  "binary": "/usr/local/bin/sample-cli",
+  "binary_basename": "sample-cli",
+  "version": "1.0.0",
+  "subcommand_count": 2,
+  "option_count": 10,
+  "options": [
+    "--port",
+    "--timeout",
+    "--max-retries",
+    "--format",
+    "--log-level",
+    "--input-file",
+    "--output-file",
+    "--config-path",
+    "--verbose",
+    "--help"
+  ],
+  "subcommands": [
+    "start",
+    "stop",
+    "delete"
+  ],
+  "help_available": true,
+  "version_available": true,
+  "man_page_available": false,
+  "analyzed_at": "2025-11-10T13:00:00Z"
+}

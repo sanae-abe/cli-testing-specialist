@@ -1,0 +1,18 @@
+{
+  "binary": "/usr/bin/python3",
+  "binary_basename": "python3",
+  "version": "3.11.0",
+  "subcommand_count": 0,
+  "option_count": 5,
+  "options": [
+    "-c",
+    "-m",
+    "--version",
+    "--help",
+    "-O"
+  ],
+  "subcommands": [],
+  "help_available": true,
+  "version_available": true,
+  "analyzed_at": "2025-11-10T14:16:00Z"
+}

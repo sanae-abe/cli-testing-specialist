@@ -1,0 +1,23 @@
+{
+  "binary": "/usr/local/bin/npm",
+  "binary_basename": "npm",
+  "version": "10.0.0",
+  "subcommand_count": 3,
+  "option_count": 6,
+  "options": [
+    "--registry",
+    "--timeout",
+    "--loglevel",
+    "--prefix",
+    "--global",
+    "--dry-run"
+  ],
+  "subcommands": [
+    "install",
+    "uninstall",
+    "publish"
+  ],
+  "help_available": true,
+  "version_available": true,
+  "analyzed_at": "2025-11-10T14:15:00Z"
+}
