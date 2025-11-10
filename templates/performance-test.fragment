@@ -14,13 +14,19 @@
 }
 
 @test "[${TEST_MODULE}] memory usage stays within reasonable limits" {
-    # Use /usr/bin/time on macOS, /usr/bin/time -v on Linux
+    # Use appropriate time command based on OS
     if command -v gtime &>/dev/null; then
         # GNU time (via Homebrew on macOS)
         run gtime -f "%M" "$CLI_BINARY" --version 2>&1
     elif [[ -f /usr/bin/time ]]; then
-        # System time (basic support)
-        run /usr/bin/time -l "$CLI_BINARY" --version 2>&1
+        # Detect OS to use correct flags
+        if [[ "$(uname)" == "Darwin" ]]; then
+            # macOS/BSD time uses -l
+            run /usr/bin/time -l "$CLI_BINARY" --version 2>&1
+        else
+            # Linux/GNU time uses -v
+            run /usr/bin/time -v "$CLI_BINARY" --version 2>&1
+        fi
     else
         skip "time command not available for memory measurement"
     fi
