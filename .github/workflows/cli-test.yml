@@ -1,0 +1,182 @@
+name: CLI Testing Specialist - Test Automation
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  test:
+    name: Run BATS Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        shell: [bash, zsh]
+        exclude:
+          # Ubuntu doesn't have zsh by default
+          - os: ubuntu-latest
+            shell: zsh
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup BATS
+        uses: mig4/setup-bats@v1
+        with:
+          bats-version: 1.10.0
+
+      - name: Install bats-support and bats-assert
+        run: |
+          git clone https://github.com/bats-core/bats-support.git test/bats-support
+          git clone https://github.com/bats-core/bats-assert.git test/bats-assert
+
+      - name: Install jq
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Install jq (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install jq
+
+      - name: Setup Zsh
+        if: matrix.shell == 'zsh'
+        run: |
+          if [ "$RUNNER_OS" == "macOS" ]; then
+            echo "Zsh already available on macOS"
+          else
+            sudo apt-get update && sudo apt-get install -y zsh
+          fi
+
+      - name: Validate agent structure
+        run: |
+          chmod +x core/*.sh utils/*.sh
+          bash core/validator.sh
+
+      - name: Generate test files (if needed)
+        run: |
+          if [ ! -d "generated-tests" ]; then
+            mkdir -p generated-tests
+            echo "#!/usr/bin/env bats" > generated-tests/sample.bats
+            echo "# Sample test for CI" >> generated-tests/sample.bats
+            echo "@test 'sample test passes' {" >> generated-tests/sample.bats
+            echo "  run echo 'hello'" >> generated-tests/sample.bats
+            echo "  [ \"\$status\" -eq 0 ]" >> generated-tests/sample.bats
+            echo "}" >> generated-tests/sample.bats
+          fi
+
+      - name: Run BATS tests
+        run: |
+          SHELL_CMD=${{ matrix.shell }}
+          if [ ! -d "generated-tests" ] || [ -z "$(ls -A generated-tests/*.bats 2>/dev/null)" ]; then
+            echo "No test files found, skipping test execution"
+            exit 0
+          fi
+
+          # Run tests with all report formats
+          bash core/run-tests.sh generated-tests all ./test-reports
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results-${{ matrix.os }}-${{ matrix.shell }}
+          path: test-reports/
+          retention-days: 30
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: html-report-${{ matrix.os }}-${{ matrix.shell }}
+          path: test-reports/test-report.html
+          retention-days: 30
+
+      - name: Check test results
+        if: always()
+        run: |
+          if [ -f "test-reports/test-report.json" ]; then
+            failed=$(jq -r '.summary.failed' test-reports/test-report.json)
+            if [ "$failed" -gt 0 ]; then
+              echo "::error::$failed test(s) failed"
+              exit 1
+            fi
+          fi
+
+  publish-reports:
+    name: Publish HTML Reports to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: test
+    if: always() && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Download all HTML reports
+        uses: actions/download-artifact@v3
+        with:
+          path: reports
+
+      - name: Create index page
+        run: |
+          mkdir -p public
+          cat > public/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>CLI Testing Reports</title>
+              <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+          </head>
+          <body>
+              <div class="container my-5">
+                  <h1 class="mb-4">CLI Testing Specialist - Test Reports</h1>
+                  <div class="list-group">
+          EOF
+
+          for report in reports/html-report-*/test-report.html; do
+            if [ -f "$report" ]; then
+              dirname=$(dirname "$report")
+              basename=$(basename "$dirname")
+              cp "$report" "public/${basename}.html"
+              echo "<a href=\"${basename}.html\" class=\"list-group-item list-group-item-action\">${basename}</a>" >> public/index.html
+            fi
+          done
+
+          cat >> public/index.html <<'EOF'
+                  </div>
+              </div>
+          </body>
+          </html>
+          EOF
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v2
+
+  lint:
+    name: ShellCheck Linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: './core ./utils'
+          severity: warning
+          ignore_paths: 'test'

@@ -8,6 +8,7 @@
 # 2. テスト生成 (test-generator.sh)
 # 3. テスト実行 (run-tests.sh)
 # 4. レポート出力
+# 5. Docker環境テスト (docker-test-runner.sh) - 新機能
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -27,8 +28,9 @@ VERSION=$(cat "$CLI_TEST_ROOT/VERSION" 2>/dev/null || echo "1.1.0-dev")
 
 # デフォルト設定
 DEFAULT_OUTPUT_DIR="./cli-test-output"
-DEFAULT_REPORT_FORMAT="both"
+DEFAULT_REPORT_FORMAT="all"
 DEFAULT_TEST_MODULES="all"
+DEFAULT_DOCKER_ENVIRONMENTS="alpine,ubuntu,debian"
 
 # 使用方法表示
 show_usage() {
@@ -39,13 +41,18 @@ Usage: $0 [OPTIONS] <cli-binary>
 
 Options:
   -o, --output DIR        Output directory (default: $DEFAULT_OUTPUT_DIR)
-  -f, --format FORMAT     Report format: markdown|json|both (default: $DEFAULT_REPORT_FORMAT)
+  -f, --format FORMAT     Report format: markdown|json|html|all (default: $DEFAULT_REPORT_FORMAT)
   -m, --modules MODULES   Test modules: all|basic|help|security|path (default: $DEFAULT_TEST_MODULES)
   -s, --skip-analysis     Skip CLI analysis (use existing analysis.json)
   -S, --skip-generation   Skip test generation (use existing tests)
   -r, --report-only       Generate report only (skip all execution)
   -v, --verbose           Enable verbose logging (DEBUG level)
   -h, --help              Show this help message
+
+Docker Options:
+  -d, --docker            Run tests in Docker containers
+  -e, --environments ENV  Docker environments: alpine|ubuntu|debian|all (default: all)
+  -t, --timeout SECONDS   Docker test timeout in seconds (default: 300)
 
 Examples:
   # Full workflow
@@ -63,10 +70,16 @@ Examples:
   # Report only
   $0 -r -o ./existing-tests
 
+  # Docker mode - all environments
+  $0 --docker /usr/bin/git
+
+  # Docker mode - specific environments
+  $0 --docker -e alpine,ubuntu /usr/bin/ls
+
 Workflow Steps:
   1. CLI Analysis    → {output}/analysis.json
   2. Test Generation → {output}/tests/*.bats
-  3. Test Execution  → TAP output
+  3. Test Execution  → TAP output (native or Docker)
   4. Report Generation → {output}/reports/
 
 EOF
@@ -82,6 +95,9 @@ parse_arguments() {
     local skip_generation=false
     local report_only=false
     local verbose=false
+    local docker_mode=false
+    local docker_environments="$DEFAULT_DOCKER_ENVIRONMENTS"
+    local docker_timeout=300
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -113,6 +129,18 @@ parse_arguments() {
                 verbose=true
                 export CLI_TEST_LOG_LEVEL=DEBUG
                 shift
+                ;;
+            -d|--docker)
+                docker_mode=true
+                shift
+                ;;
+            -e|--environments)
+                docker_environments="$2"
+                shift 2
+                ;;
+            -t|--timeout)
+                docker_timeout="$2"
+                shift 2
                 ;;
             -h|--help)
                 show_usage
@@ -146,6 +174,9 @@ parse_arguments() {
     export SKIP_GENERATION="$skip_generation"
     export REPORT_ONLY="$report_only"
     export VERBOSE="$verbose"
+    export DOCKER_MODE="$docker_mode"
+    export DOCKER_ENVIRONMENTS="$docker_environments"
+    export DOCKER_TIMEOUT="$docker_timeout"
 }
 
 # 出力ディレクトリ構造の作成
@@ -270,11 +301,11 @@ step_generate() {
     log INFO "Generated $bats_count test files"
 }
 
-# ステップ3: テスト実行
+# ステップ3: テスト実行（ネイティブ）
 step_execute() {
     local output_dir="$1"
 
-    log INFO "=== Step 3: Test Execution ==="
+    log INFO "=== Step 3: Test Execution (Native) ==="
 
     log INFO "Running BATS tests"
 
@@ -293,6 +324,42 @@ step_execute() {
     fi
 
     log INFO "Reports generated in: $output_dir/reports"
+
+    return $exit_code
+}
+
+# ステップ3B: Docker環境でのテスト実行
+step_execute_docker() {
+    local cli_binary="$1"
+    local output_dir="$2"
+    local environments="$3"
+    local timeout="$4"
+
+    log INFO "=== Step 3: Test Execution (Docker) ==="
+
+    log INFO "Running tests in Docker environments: $environments"
+
+    # Docker test runnerを実行
+    local docker_output_dir="$output_dir/docker-results"
+    mkdir -p "$docker_output_dir"
+
+    local test_output
+    local exit_code=0
+
+    test_output=$(bash "$CLI_TEST_ROOT/core/docker-test-runner.sh" \
+        -e "$environments" \
+        -t "$timeout" \
+        "$cli_binary" \
+        "$output_dir/tests" \
+        "$docker_output_dir" 2>&1) || exit_code=$?
+
+    if [[ $exit_code -eq 0 ]]; then
+        log INFO "All Docker environment tests passed ✅"
+    else
+        log WARN "Some Docker environment tests failed (exit code: $exit_code) ❌"
+    fi
+
+    log INFO "Docker test results: $docker_output_dir"
 
     return $exit_code
 }
@@ -335,14 +402,24 @@ main() {
         step_generate "$validated_output_dir" "$TEST_MODULES" || exit_code=$?
         [[ $exit_code -ne 0 ]] && exit $exit_code
 
-        # ステップ3: テスト実行
-        step_execute "$validated_output_dir" || exit_code=$?
+        # ステップ3: テスト実行（Dockerモードか通常モード）
+        if [[ "$DOCKER_MODE" == "true" ]]; then
+            step_execute_docker "$CLI_BINARY" "$validated_output_dir" "$DOCKER_ENVIRONMENTS" "$DOCKER_TIMEOUT" || exit_code=$?
+        else
+            step_execute "$validated_output_dir" || exit_code=$?
+        fi
     fi
 
     # 完了サマリー
     log INFO "=== Workflow Completed ==="
     log INFO "  Output directory: $validated_output_dir"
-    log INFO "  Reports: $validated_output_dir/reports/"
+
+    if [[ "$DOCKER_MODE" == "true" ]]; then
+        log INFO "  Docker results: $validated_output_dir/docker-results/"
+        log INFO "  Summary report: $validated_output_dir/docker-results/docker-test-summary.md"
+    else
+        log INFO "  Reports: $validated_output_dir/reports/"
+    fi
 
     if [[ $exit_code -eq 0 ]]; then
         log INFO "  Status: ✅ SUCCESS"

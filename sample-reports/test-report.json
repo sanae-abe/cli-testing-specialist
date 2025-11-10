@@ -1,0 +1,13 @@
+{
+  "report_type": "cli_testing_results",
+  "generated_at": "2025-11-10T01:40:51Z",
+  "agent_version": "1.1.0-dev",
+  "summary": {
+    "total": 15,
+    "passed": 14,
+    "failed": 0,
+    "skipped": 1,
+    "success_rate": 93.33
+  },
+  "failed_tests": []
+}

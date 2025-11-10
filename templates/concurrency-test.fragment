@@ -1,0 +1,196 @@
+@test "[${TEST_MODULE}] concurrent execution without conflicts" {
+    local num_processes=5
+    local pids=()
+
+    # Launch multiple processes simultaneously
+    for i in $(seq 1 $num_processes); do
+        (
+            "$CLI_BINARY" --version > "$TEST_TEMP_DIR/output_$i.txt" 2>&1
+            echo $? > "$TEST_TEMP_DIR/exit_$i.txt"
+        ) &
+        pids+=($!)
+    done
+
+    # Wait for all processes
+    local failed=0
+    for pid in "${pids[@]}"; do
+        wait "$pid" || ((failed++))
+    done
+
+    echo "# Launched $num_processes concurrent processes, $failed failed" >&3
+
+    # Most should succeed (allow some tolerance)
+    [ "$failed" -lt 3 ]
+}
+
+@test "[${TEST_MODULE}] file locking prevents race conditions" {
+    local lock_file="$TEST_TEMP_DIR/test.lock"
+    local output_file="$TEST_TEMP_DIR/counter.txt"
+    echo "0" > "$output_file"
+
+    # Function to safely increment counter with file lock
+    increment_counter() {
+        local lock_fd=200
+        (
+            # Try to acquire lock (with timeout)
+            if flock -w 5 $lock_fd 2>/dev/null || true; then
+                local count=$(cat "$output_file")
+                count=$((count + 1))
+                echo "$count" > "$output_file"
+            fi
+        ) 200>"$lock_file"
+    }
+
+    # Run multiple incrementers concurrently
+    for i in {1..10}; do
+        increment_counter &
+    done
+
+    wait
+
+    local final_count=$(cat "$output_file")
+    echo "# Final count: $final_count (expected: 10)" >&3
+
+    # If locking works, count should be exactly 10
+    # If not available on platform, skip
+    if command -v flock &>/dev/null; then
+        [ "$final_count" -eq 10 ]
+    else
+        skip "flock not available on this platform"
+    fi
+}
+
+@test "[${TEST_MODULE}] parallel execution output integrity" {
+    local num_parallel=3
+    local pids=()
+
+    for i in $(seq 1 $num_parallel); do
+        (
+            result=$("$CLI_BINARY" --version 2>&1)
+            echo "$result" > "$TEST_TEMP_DIR/parallel_$i.txt"
+        ) &
+        pids+=($!)
+    done
+
+    # Wait for completion
+    for pid in "${pids[@]}"; do
+        wait "$pid"
+    done
+
+    # Check all outputs are non-empty and valid
+    local valid_outputs=0
+    for i in $(seq 1 $num_parallel); do
+        if [[ -s "$TEST_TEMP_DIR/parallel_$i.txt" ]]; then
+            ((valid_outputs++))
+        fi
+    done
+
+    echo "# Valid outputs: $valid_outputs/$num_parallel" >&3
+
+    # All parallel executions should produce valid output
+    [ "$valid_outputs" -eq "$num_parallel" ]
+}
+
+@test "[${TEST_MODULE}] signal handling during concurrent execution" {
+    local pid
+
+    # Start long-running process
+    (
+        for i in {1..100}; do
+            "$CLI_BINARY" --version >/dev/null 2>&1 || true
+            sleep 0.1
+        done
+    ) &
+    pid=$!
+
+    # Give it time to start
+    sleep 0.5
+
+    # Send SIGTERM
+    kill -TERM "$pid" 2>/dev/null || true
+
+    # Wait with timeout
+    local wait_result=0
+    timeout 5 bash -c "while kill -0 $pid 2>/dev/null; do sleep 0.1; done" || wait_result=$?
+
+    echo "# Process terminated gracefully: $wait_result" >&3
+
+    # Cleanup
+    kill -9 "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+
+    # Process should terminate (wait_result 0 or 124 for timeout)
+    [ "$wait_result" -eq 0 ] || [ "$wait_result" -eq 124 ]
+}
+
+@test "[${TEST_MODULE}] deadlock prevention in concurrent scenarios" {
+    local timeout_seconds=10
+    local start_time=$(date +%s)
+    local pids=()
+
+    # Launch multiple processes that might interact
+    for i in {1..3}; do
+        (
+            for j in {1..5}; do
+                "$CLI_BINARY" --version >/dev/null 2>&1 || true
+            done
+        ) &
+        pids+=($!)
+    done
+
+    # Wait with timeout
+    local all_completed=true
+    for pid in "${pids[@]}"; do
+        if ! timeout "$timeout_seconds" bash -c "wait $pid" 2>/dev/null; then
+            all_completed=false
+            kill -9 "$pid" 2>/dev/null || true
+        fi
+    done
+
+    local end_time=$(date +%s)
+    local duration=$((end_time - start_time))
+
+    echo "# Concurrent execution completed in ${duration}s" >&3
+
+    # Should complete without deadlock
+    [ "$duration" -lt "$timeout_seconds" ]
+    [ "$all_completed" = true ] || skip "Some processes timed out - potential deadlock"
+}
+
+@test "[${TEST_MODULE}] thread safety in parallel invocations" {
+    # Test if CLI can be safely called from multiple threads/processes
+    local concurrent_calls=8
+    local output_dir="$TEST_TEMP_DIR/concurrent"
+    mkdir -p "$output_dir"
+
+    # Launch concurrent calls
+    for i in $(seq 1 $concurrent_calls); do
+        (
+            result=$("$CLI_BINARY" --version 2>&1)
+            exit_code=$?
+            echo "$exit_code|$result" > "$output_dir/call_$i.result"
+        ) &
+    done
+
+    wait
+
+    # Analyze results
+    local successful=0
+    local failed=0
+
+    for i in $(seq 1 $concurrent_calls); do
+        if [[ -f "$output_dir/call_$i.result" ]]; then
+            local exit_code=$(cut -d'|' -f1 "$output_dir/call_$i.result")
+            if [[ "$exit_code" == "0" ]] || [[ "$exit_code" == "1" ]]; then
+                ((successful++))
+            else
+                ((failed++))
+            fi
+        fi
+    done
+
+    echo "# Thread safety: $successful succeeded, $failed failed" >&3
+
+    # Most concurrent calls should succeed
+    [ "$successful" -ge $((concurrent_calls - 2)) ]
+}

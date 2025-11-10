@@ -1,0 +1,254 @@
+# GitLab CI/CD Configuration for CLI Testing Specialist Agent
+
+stages:
+  - validate
+  - test
+  - report
+  - deploy
+
+variables:
+  GIT_DEPTH: 10
+  BATS_VERSION: "1.10.0"
+  REPORTS_DIR: "test-reports"
+
+# キャッシュ設定
+cache:
+  paths:
+    - test/bats-support/
+    - test/bats-assert/
+
+# 共通設定: BATS環境構築
+.setup_bats: &setup_bats
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq git jq curl
+    - |
+      # Install BATS
+      if [ ! -f "/usr/local/bin/bats" ]; then
+        curl -sSL https://github.com/bats-core/bats-core/archive/v${BATS_VERSION}.tar.gz | tar -xz
+        cd bats-core-${BATS_VERSION}
+        ./install.sh /usr/local
+        cd ..
+      fi
+    - |
+      # Install bats-support and bats-assert
+      if [ ! -d "test/bats-support" ]; then
+        git clone --depth 1 https://github.com/bats-core/bats-support.git test/bats-support
+      fi
+      if [ ! -d "test/bats-assert" ]; then
+        git clone --depth 1 https://github.com/bats-core/bats-assert.git test/bats-assert
+      fi
+    - chmod +x core/*.sh utils/*.sh
+
+# Stage 1: Validation
+validate:structure:
+  stage: validate
+  image: ubuntu:22.04
+  <<: *setup_bats
+  script:
+    - echo "Validating agent structure..."
+    - bash core/validator.sh
+  artifacts:
+    reports:
+      junit: validation-report.xml
+    when: always
+
+shellcheck:
+  stage: validate
+  image: koalaman/shellcheck-alpine:stable
+  script:
+    - shellcheck -f gcc core/*.sh utils/*.sh || true
+  allow_failure: true
+
+# Stage 2: Testing - Bash
+test:bash:ubuntu:
+  stage: test
+  image: ubuntu:22.04
+  <<: *setup_bats
+  script:
+    - echo "Running BATS tests with Bash on Ubuntu..."
+    - mkdir -p ${REPORTS_DIR}
+    - |
+      if [ ! -d "generated-tests" ] || [ -z "$(ls -A generated-tests/*.bats 2>/dev/null)" ]; then
+        echo "No test files found, creating sample test..."
+        mkdir -p generated-tests
+        cat > generated-tests/sample.bats <<'BATS_EOF'
+      #!/usr/bin/env bats
+      @test "sample test passes" {
+        run echo "hello"
+        [ "$status" -eq 0 ]
+      }
+      BATS_EOF
+      fi
+    - bash core/run-tests.sh generated-tests all ${REPORTS_DIR}
+  artifacts:
+    paths:
+      - ${REPORTS_DIR}/
+    reports:
+      junit: ${REPORTS_DIR}/test-report.xml
+    when: always
+    expire_in: 30 days
+  coverage: '/Success Rate.*?(\d+\.\d+)%/'
+
+# Stage 2: Testing - Zsh
+test:zsh:ubuntu:
+  stage: test
+  image: ubuntu:22.04
+  <<: *setup_bats
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq git jq curl zsh
+    - !reference [.setup_bats, before_script]
+  script:
+    - echo "Running BATS tests with Zsh on Ubuntu..."
+    - mkdir -p ${REPORTS_DIR}-zsh
+    - |
+      if [ ! -d "generated-tests" ] || [ -z "$(ls -A generated-tests/*.bats 2>/dev/null)" ]; then
+        echo "No test files found, creating sample test..."
+        mkdir -p generated-tests
+        cat > generated-tests/sample.bats <<'BATS_EOF'
+      #!/usr/bin/env bats
+      @test "sample test passes" {
+        run echo "hello"
+        [ "$status" -eq 0 ]
+      }
+      BATS_EOF
+      fi
+    - zsh -c "bash core/run-tests.sh generated-tests all ${REPORTS_DIR}-zsh"
+  artifacts:
+    paths:
+      - ${REPORTS_DIR}-zsh/
+    when: always
+    expire_in: 30 days
+
+# Stage 2: Testing - Dash (POSIX compliance)
+test:dash:ubuntu:
+  stage: test
+  image: ubuntu:22.04
+  <<: *setup_bats
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq git jq curl dash
+    - !reference [.setup_bats, before_script]
+  script:
+    - echo "Running BATS tests with Dash (POSIX) on Ubuntu..."
+    - mkdir -p ${REPORTS_DIR}-dash
+    - |
+      if [ ! -d "generated-tests" ] || [ -z "$(ls -A generated-tests/*.bats 2>/dev/null)" ]; then
+        echo "No test files found, creating sample test..."
+        mkdir -p generated-tests
+        cat > generated-tests/sample.bats <<'BATS_EOF'
+      #!/usr/bin/env bats
+      @test "sample test passes" {
+        run echo "hello"
+        [ "$status" -eq 0 ]
+      }
+      BATS_EOF
+      fi
+    - dash -c "bash core/run-tests.sh generated-tests all ${REPORTS_DIR}-dash" || true
+  artifacts:
+    paths:
+      - ${REPORTS_DIR}-dash/
+    when: always
+    expire_in: 30 days
+  allow_failure: true
+
+# Stage 3: Report aggregation
+aggregate:reports:
+  stage: report
+  image: ubuntu:22.04
+  dependencies:
+    - test:bash:ubuntu
+    - test:zsh:ubuntu
+    - test:dash:ubuntu
+  script:
+    - apt-get update -qq && apt-get install -y -qq jq
+    - echo "Aggregating test reports..."
+    - mkdir -p aggregated-reports
+    - |
+      # Aggregate JSON reports
+      jq -s '{
+        aggregated: true,
+        timestamp: now | todate,
+        environments: map({
+          shell: (if .agent_version then "bash" else "unknown" end),
+          summary: .summary,
+          failed_tests: .failed_tests
+        })
+      }' ${REPORTS_DIR}*/test-report.json > aggregated-reports/combined-report.json
+    - |
+      # Copy HTML reports
+      for report in ${REPORTS_DIR}*/test-report.html; do
+        if [ -f "$report" ]; then
+          dirname=$(dirname "$report")
+          basename=$(basename "$dirname")
+          cp "$report" "aggregated-reports/report-${basename}.html"
+        fi
+      done
+    - |
+      # Create index page
+      cat > aggregated-reports/index.html <<'INDEX_EOF'
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>CLI Testing Reports - Aggregated</title>
+          <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+      </head>
+      <body>
+          <div class="container my-5">
+              <h1 class="mb-4">CLI Testing Specialist - Aggregated Reports</h1>
+              <div class="list-group">
+      INDEX_EOF
+
+      for report in aggregated-reports/report-*.html; do
+        if [ -f "$report" ]; then
+          basename=$(basename "$report")
+          echo "<a href=\"${basename}\" class=\"list-group-item list-group-item-action\">${basename}</a>" >> aggregated-reports/index.html
+        fi
+      done
+
+      cat >> aggregated-reports/index.html <<'INDEX_EOF'
+              </div>
+          </div>
+      </body>
+      </html>
+      INDEX_EOF
+  artifacts:
+    paths:
+      - aggregated-reports/
+    expire_in: 90 days
+
+# Stage 4: Deploy to GitLab Pages (only on main branch)
+pages:
+  stage: deploy
+  image: alpine:latest
+  dependencies:
+    - aggregate:reports
+  script:
+    - echo "Deploying reports to GitLab Pages..."
+    - mv aggregated-reports public
+  artifacts:
+    paths:
+      - public
+    expire_in: 90 days
+  only:
+    - main
+    - master
+
+# Scheduled pipeline for regression testing
+regression:test:
+  stage: test
+  image: ubuntu:22.04
+  <<: *setup_bats
+  script:
+    - echo "Running regression tests..."
+    - bash core/run-tests.sh generated-tests all regression-reports
+  artifacts:
+    paths:
+      - regression-reports/
+    when: always
+    expire_in: 90 days
+  only:
+    - schedules

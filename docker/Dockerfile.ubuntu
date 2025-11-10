@@ -1,0 +1,49 @@
+# Dockerfile.ubuntu - Ubuntu環境でのCLIテスト
+# CLI Testing Specialist Agent v1.1.0
+
+FROM ubuntu:22.04
+
+LABEL maintainer="CLI Testing Specialist"
+LABEL description="Ubuntu environment for CLI testing"
+
+# タイムゾーン設定（対話防止）
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+
+# 必要なパッケージのインストール
+RUN apt-get update && apt-get install -y \
+    bash \
+    coreutils \
+    findutils \
+    grep \
+    sed \
+    jq \
+    curl \
+    git \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# BATSインストール
+RUN git clone --depth 1 https://github.com/bats-core/bats-core.git /tmp/bats-core \
+    && cd /tmp/bats-core \
+    && ./install.sh /usr/local \
+    && rm -rf /tmp/bats-core
+
+# BATS補助ライブラリ
+RUN git clone --depth 1 https://github.com/bats-core/bats-support.git /opt/bats-support \
+    && git clone --depth 1 https://github.com/bats-core/bats-assert.git /opt/bats-assert \
+    && git clone --depth 1 https://github.com/bats-core/bats-file.git /opt/bats-file
+
+# 作業ディレクトリ
+WORKDIR /test
+
+# テストディレクトリ作成
+RUN mkdir -p /test-cli /test-suite /test-output
+
+# BATS補助ライブラリのロードパス
+ENV BATS_SUPPORT_PATH=/opt/bats-support
+ENV BATS_ASSERT_PATH=/opt/bats-assert
+ENV BATS_FILE_PATH=/opt/bats-file
+
+# デフォルトコマンド
+CMD ["/bin/bash"]

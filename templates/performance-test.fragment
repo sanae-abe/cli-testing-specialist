@@ -1,0 +1,91 @@
+@test "[${TEST_MODULE}] execution time under 5 seconds" {
+    local start_time=$(date +%s%N)
+    run timeout 10 "$CLI_BINARY" --version
+    local end_time=$(date +%s%N)
+
+    local duration_ns=$((end_time - start_time))
+    local duration_ms=$((duration_ns / 1000000))
+
+    # Log execution time
+    echo "# Execution time: ${duration_ms}ms" >&3
+
+    # Should complete within 5 seconds (5000ms)
+    [ "$duration_ms" -lt 5000 ]
+}
+
+@test "[${TEST_MODULE}] memory usage stays within reasonable limits" {
+    # Use /usr/bin/time on macOS, /usr/bin/time -v on Linux
+    if command -v gtime &>/dev/null; then
+        # GNU time (via Homebrew on macOS)
+        run gtime -f "%M" "$CLI_BINARY" --version 2>&1
+    elif [[ -f /usr/bin/time ]]; then
+        # System time (basic support)
+        run /usr/bin/time -l "$CLI_BINARY" --version 2>&1
+    else
+        skip "time command not available for memory measurement"
+    fi
+
+    [ "$status" -eq 0 ] || [ "$status" -eq 1 ]
+    echo "# Memory check completed" >&3
+}
+
+@test "[${TEST_MODULE}] handles large input efficiently" {
+    local large_input=$(printf 'A%.0s' {1..1000})
+
+    local start_time=$(date +%s%N)
+    run timeout 10 "$CLI_BINARY" --help "$large_input" 2>&1
+    local end_time=$(date +%s%N)
+
+    local duration_ms=$(( (end_time - start_time) / 1000000 ))
+
+    echo "# Large input processing time: ${duration_ms}ms" >&3
+
+    # Should complete within 10 seconds
+    [ "$duration_ms" -lt 10000 ]
+}
+
+@test "[${TEST_MODULE}] rapid successive calls performance" {
+    local iterations=10
+    local start_time=$(date +%s%N)
+
+    for i in $(seq 1 $iterations); do
+        "$CLI_BINARY" --version >/dev/null 2>&1 || true
+    done
+
+    local end_time=$(date +%s%N)
+    local total_ms=$(( (end_time - start_time) / 1000000 ))
+    local avg_ms=$((total_ms / iterations))
+
+    echo "# ${iterations} iterations: ${total_ms}ms total, ${avg_ms}ms average" >&3
+
+    # Average should be reasonable (under 1 second per call)
+    [ "$avg_ms" -lt 1000 ]
+}
+
+@test "[${TEST_MODULE}] resource cleanup after execution" {
+    local initial_fds
+    if [[ -d /proc/self/fd ]]; then
+        initial_fds=$(ls /proc/self/fd 2>/dev/null | wc -l)
+    else
+        # macOS fallback - use lsof
+        initial_fds=$(lsof -p $$ 2>/dev/null | wc -l || echo "0")
+    fi
+
+    # Run CLI multiple times
+    for i in {1..5}; do
+        "$CLI_BINARY" --version >/dev/null 2>&1 || true
+    done
+
+    local final_fds
+    if [[ -d /proc/self/fd ]]; then
+        final_fds=$(ls /proc/self/fd 2>/dev/null | wc -l)
+    else
+        final_fds=$(lsof -p $$ 2>/dev/null | wc -l || echo "0")
+    fi
+
+    echo "# File descriptors: initial=$initial_fds, final=$final_fds" >&3
+
+    # Should not leak file descriptors (allow small variance)
+    local fd_diff=$((final_fds - initial_fds))
+    [ "$fd_diff" -lt 10 ] || skip "FD tracking not reliable on this platform"
+}

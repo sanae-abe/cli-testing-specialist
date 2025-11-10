@@ -1,0 +1,44 @@
+# Dockerfile.alpine - Alpine Linux環境でのCLIテスト
+# CLI Testing Specialist Agent v1.1.0
+
+FROM alpine:3.19
+
+LABEL maintainer="CLI Testing Specialist"
+LABEL description="Alpine Linux environment for CLI testing"
+
+# 必要なパッケージのインストール
+RUN apk add --no-cache \
+    bash \
+    coreutils \
+    findutils \
+    grep \
+    sed \
+    jq \
+    curl \
+    git \
+    && rm -rf /var/cache/apk/*
+
+# BATSインストール
+RUN git clone --depth 1 https://github.com/bats-core/bats-core.git /tmp/bats-core \
+    && cd /tmp/bats-core \
+    && ./install.sh /usr/local \
+    && rm -rf /tmp/bats-core
+
+# BATS補助ライブラリ
+RUN git clone --depth 1 https://github.com/bats-core/bats-support.git /opt/bats-support \
+    && git clone --depth 1 https://github.com/bats-core/bats-assert.git /opt/bats-assert \
+    && git clone --depth 1 https://github.com/bats-core/bats-file.git /opt/bats-file
+
+# 作業ディレクトリ
+WORKDIR /test
+
+# テストディレクトリ作成
+RUN mkdir -p /test-cli /test-suite /test-output
+
+# BATS補助ライブラリのロードパス
+ENV BATS_SUPPORT_PATH=/opt/bats-support
+ENV BATS_ASSERT_PATH=/opt/bats-assert
+ENV BATS_FILE_PATH=/opt/bats-file
+
+# デフォルトコマンド
+CMD ["/bin/bash"]

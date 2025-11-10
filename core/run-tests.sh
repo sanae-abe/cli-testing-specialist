@@ -6,7 +6,7 @@
 # 機能:
 # - 生成されたBATSテストの実行
 # - テスト結果の収集と集計
-# - レポート生成（Markdown/JSON/JUnit XML）
+# - レポート生成（Markdown/JSON/HTML/JUnit XML）
 # - 環境変数管理
 
 set -euo pipefail
@@ -282,10 +282,40 @@ generate_json_report() {
     log INFO "JSON report generated: $output_file"
 }
 
+# HTMLレポート生成（新規）
+generate_html_report() {
+    local test_results="$1"
+    local summary_json="$2"
+    local output_file="$3"
+
+    log INFO "Generating HTML report: $output_file"
+
+    # HTML生成スクリプトを呼び出し
+    if [[ -x "$SCRIPT_DIR/report-generator-html.sh" ]]; then
+        # 一時ファイルに結果を保存
+        local tmp_tap_file="/tmp/tap-results-$$.tap"
+        local tmp_json_file="/tmp/summary-$$.json"
+
+        echo "$test_results" > "$tmp_tap_file"
+        echo "$summary_json" > "$tmp_json_file"
+
+        # HTML生成実行
+        "$SCRIPT_DIR/report-generator-html.sh" "$tmp_tap_file" "$tmp_json_file" "$output_file"
+
+        # 一時ファイル削除
+        rm -f "$tmp_tap_file" "$tmp_json_file"
+
+        log INFO "HTML report generated: $output_file"
+    else
+        log ERROR "HTML report generator not found: $SCRIPT_DIR/report-generator-html.sh"
+        return 1
+    fi
+}
+
 # メイン実行関数
 run_tests_main() {
     local test_dir="$1"
-    local report_format="${2:-markdown}"  # markdown, json, both
+    local report_format="${2:-markdown}"  # markdown, json, html, all
     local output_dir="${3:-.}"
 
     log INFO "Starting test execution"
@@ -323,12 +353,17 @@ run_tests_main() {
         json)
             generate_json_report "$test_results" "$summary_json" "$validated_output_dir/test-report.json"
             ;;
-        both)
+        html)
+            generate_html_report "$test_results" "$summary_json" "$validated_output_dir/test-report.html"
+            ;;
+        all)
             generate_markdown_report "$test_results" "$summary_json" "$validated_output_dir/test-report.md"
             generate_json_report "$test_results" "$summary_json" "$validated_output_dir/test-report.json"
+            generate_html_report "$test_results" "$summary_json" "$validated_output_dir/test-report.html"
             ;;
         *)
             log ERROR "Unknown report format: $report_format"
+            log ERROR "Valid formats: markdown, json, html, all"
             return 1
             ;;
     esac
@@ -348,12 +383,13 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
         echo "" >&2
         echo "Arguments:" >&2
         echo "  <test-dir>        Directory containing .bats test files" >&2
-        echo "  [report-format]   markdown|json|both (default: markdown)" >&2
+        echo "  [report-format]   markdown|json|html|all (default: markdown)" >&2
         echo "  [output-dir]      Output directory for reports (default: .)" >&2
         echo "" >&2
-        echo "Example:" >&2
+        echo "Examples:" >&2
         echo "  $0 ./generated-tests" >&2
-        echo "  $0 ./generated-tests both ./reports" >&2
+        echo "  $0 ./generated-tests html ./reports" >&2
+        echo "  $0 ./generated-tests all ./reports" >&2
         exit 1
     fi
 

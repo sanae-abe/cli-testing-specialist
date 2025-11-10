@@ -1,0 +1,84 @@
+# docker-compose.yml - 複数環境でのCLI並列テスト
+# CLI Testing Specialist Agent v1.1.0
+
+version: '3.8'
+
+services:
+  # Alpine Linux環境
+  test-alpine:
+    build:
+      context: .
+      dockerfile: Dockerfile.alpine
+    image: cli-testing-specialist:alpine
+    container_name: cli-test-alpine
+    volumes:
+      - ${CLI_BINARY:-/bin/echo}:/test-cli/test-binary:ro
+      - ${TEST_DIR:-../tests}:/test-suite:ro
+      - ${OUTPUT_DIR:-../test-output}/alpine:/test-output
+    environment:
+      - CLI_BINARY=/test-cli/test-binary
+      - TEST_DIR=/test-suite
+      - OUTPUT_DIR=/test-output
+      - ENVIRONMENT=alpine
+    command: bats --formatter tap /test-suite/*.bats
+    networks:
+      - test-network
+
+  # Ubuntu環境
+  test-ubuntu:
+    build:
+      context: .
+      dockerfile: Dockerfile.ubuntu
+    image: cli-testing-specialist:ubuntu
+    container_name: cli-test-ubuntu
+    volumes:
+      - ${CLI_BINARY:-/bin/echo}:/test-cli/test-binary:ro
+      - ${TEST_DIR:-../tests}:/test-suite:ro
+      - ${OUTPUT_DIR:-../test-output}/ubuntu:/test-output
+    environment:
+      - CLI_BINARY=/test-cli/test-binary
+      - TEST_DIR=/test-suite
+      - OUTPUT_DIR=/test-output
+      - ENVIRONMENT=ubuntu
+    command: bats --formatter tap /test-suite/*.bats
+    networks:
+      - test-network
+
+  # Debian環境
+  test-debian:
+    build:
+      context: .
+      dockerfile: Dockerfile.debian
+    image: cli-testing-specialist:debian
+    container_name: cli-test-debian
+    volumes:
+      - ${CLI_BINARY:-/bin/echo}:/test-cli/test-binary:ro
+      - ${TEST_DIR:-../tests}:/test-suite:ro
+      - ${OUTPUT_DIR:-../test-output}/debian:/test-output
+    environment:
+      - CLI_BINARY=/test-cli/test-binary
+      - TEST_DIR=/test-suite
+      - OUTPUT_DIR=/test-output
+      - ENVIRONMENT=debian
+    command: bats --formatter tap /test-suite/*.bats
+    networks:
+      - test-network
+
+networks:
+  test-network:
+    driver: bridge
+
+# 使用方法:
+# 1. 環境変数を設定:
+#    export CLI_BINARY=/path/to/cli
+#    export TEST_DIR=/path/to/tests
+#    export OUTPUT_DIR=/path/to/output
+#
+# 2. 全環境でテスト実行:
+#    docker-compose up --build
+#
+# 3. 特定環境のみ:
+#    docker-compose up --build test-alpine
+#
+# 4. クリーンアップ:
+#    docker-compose down
