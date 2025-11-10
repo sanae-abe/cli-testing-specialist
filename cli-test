@@ -22,15 +22,22 @@ CLI_TEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # 依存ファイルの読み込み
 source "$CLI_TEST_ROOT/utils/logger.sh"
 source "$CLI_TEST_ROOT/core/validator.sh"
+source "$CLI_TEST_ROOT/core/config-loader.sh"
 
 # バージョン情報
 VERSION=$(cat "$CLI_TEST_ROOT/VERSION" 2>/dev/null || echo "1.1.0-dev")
 
-# デフォルト設定
-DEFAULT_OUTPUT_DIR="./cli-test-output"
-DEFAULT_REPORT_FORMAT="all"
-DEFAULT_TEST_MODULES="all"
-DEFAULT_DOCKER_ENVIRONMENTS="alpine,ubuntu,debian"
+# 設定の読み込み
+load_all_config || {
+    log ERROR "Failed to load configuration"
+    exit 1
+}
+
+# デフォルト設定（config-loaderからエクスポート済み変数を使用）
+DEFAULT_OUTPUT_DIR="${CONFIG_OUTPUT_BASE_DIR}"
+DEFAULT_REPORT_FORMAT="${CONFIG_REPORT_FORMAT}"
+DEFAULT_TEST_MODULES="${CONFIG_TEST_MODULES}"
+DEFAULT_DOCKER_ENVIRONMENTS="${CONFIG_DOCKER_ENVIRONMENTS}"
 
 # 使用方法表示
 show_usage() {

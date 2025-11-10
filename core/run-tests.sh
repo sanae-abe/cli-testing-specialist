@@ -8,6 +8,7 @@
 # - テスト結果の収集と集計
 # - レポート生成（Markdown/JSON/HTML/JUnit XML）
 # - 環境変数管理
+#
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -282,7 +283,7 @@ generate_json_report() {
     log INFO "JSON report generated: $output_file"
 }
 
-# HTMLレポート生成（新規）
+# HTMLレポート生成
 generate_html_report() {
     local test_results="$1"
     local summary_json="$2"
@@ -312,10 +313,134 @@ generate_html_report() {
     fi
 }
 
+# JUnit XMLレポート生成
+generate_junit_report() {
+    local test_results="$1"
+    local summary_json="$2"
+    local output_file="$3"
+
+    log INFO "Generating JUnit XML report: $output_file"
+
+    local total passed failed skipped
+    total=$(echo "$summary_json" | jq -r '.total')
+    passed=$(echo "$summary_json" | jq -r '.passed')
+    failed=$(echo "$summary_json" | jq -r '.failed')
+    skipped=$(echo "$summary_json" | jq -r '.skipped')
+
+    local timestamp
+    timestamp=$(date -u '+%Y-%m-%dT%H:%M:%S')
+
+    # 開始時刻を記録（概算）
+    local start_time
+    start_time=$(date -u '+%s')
+
+    # XML生成開始
+    {
+        echo '<?xml version="1.0" encoding="UTF-8"?>'
+        echo '<testsuites>'
+
+        # テストスイート開始（全体を1つのスイートとして扱う）
+        local total_time="0"
+        echo "  <testsuite name=\"cli-tests\" tests=\"$total\" failures=\"$failed\" skipped=\"$skipped\" time=\"$total_time\" timestamp=\"$timestamp\">"
+
+        # TAP出力をパースしてテストケースを生成
+        local current_file=""
+        local test_number=0
+        local in_failure=false
+        local failure_message=""
+        local test_name=""
+        local test_time="0"
+
+        while IFS= read -r line; do
+            # ファイル名の抽出（BATSのTAP出力から）
+            if [[ "$line" =~ ^#\ (.+\.bats) ]]; then
+                current_file="${BASH_REMATCH[1]}"
+                current_file=$(basename "$current_file" .bats)
+            fi
+
+            # テスト成功
+            if [[ "$line" =~ ^ok\ ([0-9]+)\ (.+) ]]; then
+                test_number="${BASH_REMATCH[1]}"
+                test_name="${BASH_REMATCH[2]}"
+
+                # タイミング情報の抽出（あれば）
+                if [[ "$line" =~ in\ ([0-9.]+)s ]]; then
+                    test_time="${BASH_REMATCH[1]}"
+                else
+                    test_time="0"
+                fi
+
+                # スキップチェック
+                if [[ "$line" =~ \#\ skip ]]; then
+                    echo "    <testcase classname=\"${current_file:-unknown}\" name=\"$test_name\" time=\"$test_time\">"
+                    echo "      <skipped/>"
+                    echo "    </testcase>"
+                else
+                    echo "    <testcase classname=\"${current_file:-unknown}\" name=\"$test_name\" time=\"$test_time\"/>"
+                fi
+            fi
+
+            # テスト失敗
+            if [[ "$line" =~ ^not\ ok\ ([0-9]+)\ (.+) ]]; then
+                test_number="${BASH_REMATCH[1]}"
+                test_name="${BASH_REMATCH[2]}"
+                in_failure=true
+                failure_message=""
+
+                # タイミング情報の抽出（あれば）
+                if [[ "$line" =~ in\ ([0-9.]+)s ]]; then
+                    test_time="${BASH_REMATCH[1]}"
+                else
+                    test_time="0"
+                fi
+            fi
+
+            # 失敗メッセージの収集
+            if [[ $in_failure == true ]]; then
+                if [[ "$line" =~ ^#\ (.+) ]]; then
+                    local msg="${BASH_REMATCH[1]}"
+                    # ファイル名以外のコメントを失敗メッセージとして収集
+                    if [[ ! "$msg" =~ \.bats$ ]]; then
+                        failure_message+="$msg"$'\n'
+                    fi
+                elif [[ "$line" =~ ^(ok|not\ ok)\ [0-9]+ ]] || [[ "$line" =~ ^1\.\.[0-9]+ ]]; then
+                    # 次のテストケースまたは終了時に失敗情報を出力
+                    if [[ -n "$test_name" ]]; then
+                        echo "    <testcase classname=\"${current_file:-unknown}\" name=\"$test_name\" time=\"$test_time\">"
+                        echo "      <failure message=\"Test failed\">"
+                        # XMLエスケープ
+                        echo "$failure_message" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g'
+                        echo "      </failure>"
+                        echo "    </testcase>"
+                    fi
+                    in_failure=false
+                    test_name=""
+                    failure_message=""
+                fi
+            fi
+        done <<< "$test_results"
+
+        # 最後の失敗が未出力の場合
+        if [[ $in_failure == true ]] && [[ -n "$test_name" ]]; then
+            echo "    <testcase classname=\"${current_file:-unknown}\" name=\"$test_name\" time=\"$test_time\">"
+            echo "      <failure message=\"Test failed\">"
+            echo "$failure_message" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g'
+            echo "      </failure>"
+            echo "    </testcase>"
+        fi
+
+        # テストスイート終了
+        echo "  </testsuite>"
+        echo '</testsuites>'
+    } > "$output_file"
+
+    log INFO "JUnit XML report generated: $output_file"
+}
+
 # メイン実行関数
 run_tests_main() {
     local test_dir="$1"
-    local report_format="${2:-markdown}"  # markdown, json, html, all
+    local report_format="${2:-markdown}"  # markdown, json, html, junit, all
     local output_dir="${3:-.}"
 
     log INFO "Starting test execution"
@@ -356,14 +481,18 @@ run_tests_main() {
         html)
             generate_html_report "$test_results" "$summary_json" "$validated_output_dir/test-report.html"
             ;;
+        junit)
+            generate_junit_report "$test_results" "$summary_json" "$validated_output_dir/test-report.xml"
+            ;;
         all)
             generate_markdown_report "$test_results" "$summary_json" "$validated_output_dir/test-report.md"
             generate_json_report "$test_results" "$summary_json" "$validated_output_dir/test-report.json"
             generate_html_report "$test_results" "$summary_json" "$validated_output_dir/test-report.html"
+            generate_junit_report "$test_results" "$summary_json" "$validated_output_dir/test-report.xml"
             ;;
         *)
             log ERROR "Unknown report format: $report_format"
-            log ERROR "Valid formats: markdown, json, html, all"
+            log ERROR "Valid formats: markdown, json, html, junit, all"
             return 1
             ;;
     esac
@@ -383,12 +512,13 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
         echo "" >&2
         echo "Arguments:" >&2
         echo "  <test-dir>        Directory containing .bats test files" >&2
-        echo "  [report-format]   markdown|json|html|all (default: markdown)" >&2
+        echo "  [report-format]   markdown|json|html|junit|all (default: markdown)" >&2
         echo "  [output-dir]      Output directory for reports (default: .)" >&2
         echo "" >&2
         echo "Examples:" >&2
         echo "  $0 ./generated-tests" >&2
         echo "  $0 ./generated-tests html ./reports" >&2
+        echo "  $0 ./generated-tests junit ./reports" >&2
         echo "  $0 ./generated-tests all ./reports" >&2
         exit 1
     fi

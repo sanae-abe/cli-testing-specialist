@@ -1,0 +1,56 @@
+# CLI Testing Specialist デフォルト設定
+# Version: 1.0.0
+# このファイルは schema.yaml に準拠した設定値を定義します
+
+# テストモジュール
+test_modules: ["all"]
+
+# レポート形式
+report_format: "all"
+
+# タイムアウト設定（秒）
+timeouts:
+  test_execution: 30
+  docker_container: 300
+  cli_analysis: 60
+
+# Docker環境設定
+docker:
+  enabled: false
+  environments:
+    - alpine
+    - ubuntu
+    - debian
+  base_images:
+    alpine: "3.18"
+    ubuntu: "22.04"
+    debian: "12"
+    centos: "8"
+    fedora: "38"
+
+# Shell検出設定
+shell_detection:
+  enabled: true
+  fallback_shells:
+    - "/bin/bash"
+    - "/bin/sh"
+  test_shells:
+    - "bash"
+    - "zsh"
+    - "sh"
+    - "dash"
+    - "ksh"
+
+# 出力設定
+output:
+  base_dir: "./cli-test-output"
+  structure:
+    tests: "tests"
+    reports: "reports"
+    docker_results: "docker-results"
+
+# ログ設定
+logging:
+  level: "INFO"
+  enable_colors: true
+  timestamp_format: "%Y-%m-%d %H:%M:%S"

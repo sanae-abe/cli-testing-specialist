@@ -1,0 +1,183 @@
+# CLI Testing Specialist 設定スキーマ定義
+# Version: 1.0.0
+
+# テストモジュール設定
+test_modules:
+  description: "利用可能なテストモジュールの定義"
+  type: "array"
+  default: ["all"]
+  allowed_values:
+    - "all"         # 全モジュール実行
+    - "basic"       # 基本実行テスト
+    - "help"        # ヘルプオプションテスト
+    - "security"    # セキュリティ脆弱性テスト
+    - "path"        # パストラバーサルテスト
+    - "error"       # エラーハンドリングテスト
+    - "performance" # パフォーマンステスト
+  validation:
+    required: true
+    min_items: 1
+
+# レポート形式設定
+report_format:
+  description: "出力レポートの形式"
+  type: "string"
+  default: "all"
+  allowed_values:
+    - "markdown"  # Markdownレポートのみ
+    - "json"      # JSONレポートのみ
+    - "html"      # HTMLレポートのみ
+    - "all"       # 全形式出力
+  validation:
+    required: true
+
+# タイムアウト設定
+timeouts:
+  description: "各種操作のタイムアウト値（秒）"
+  type: "object"
+  properties:
+    test_execution:
+      type: "integer"
+      default: 30
+      description: "個別テスト実行のタイムアウト"
+      validation:
+        min: 1
+        max: 300
+    docker_container:
+      type: "integer"
+      default: 300
+      description: "Dockerコンテナテストのタイムアウト"
+      validation:
+        min: 60
+        max: 3600
+    cli_analysis:
+      type: "integer"
+      default: 60
+      description: "CLI解析のタイムアウト"
+      validation:
+        min: 10
+        max: 300
+
+# Docker環境設定
+docker:
+  description: "Docker環境でのテスト実行設定"
+  type: "object"
+  properties:
+    enabled:
+      type: "boolean"
+      default: false
+      description: "Docker環境テストの有効化"
+    environments:
+      type: "array"
+      default: ["alpine", "ubuntu", "debian"]
+      description: "テスト対象のDocker環境"
+      allowed_values:
+        - "alpine"
+        - "ubuntu"
+        - "debian"
+        - "centos"
+        - "fedora"
+      validation:
+        min_items: 1
+    base_images:
+      type: "object"
+      description: "各環境のベースイメージタグ"
+      properties:
+        alpine:
+          type: "string"
+          default: "3.18"
+        ubuntu:
+          type: "string"
+          default: "22.04"
+        debian:
+          type: "string"
+          default: "12"
+        centos:
+          type: "string"
+          default: "8"
+        fedora:
+          type: "string"
+          default: "38"
+
+# Shell検出設定
+shell_detection:
+  description: "利用可能なシェルの自動検出設定"
+  type: "object"
+  properties:
+    enabled:
+      type: "boolean"
+      default: true
+      description: "Shell検出の有効化"
+    fallback_shells:
+      type: "array"
+      default: ["/bin/bash", "/bin/sh"]
+      description: "検出失敗時のフォールバックシェル"
+      validation:
+        min_items: 1
+    test_shells:
+      type: "array"
+      default: ["bash", "zsh", "sh", "dash", "ksh"]
+      description: "検出対象のシェル名"
+
+# 出力設定
+output:
+  description: "出力ディレクトリとファイル設定"
+  type: "object"
+  properties:
+    base_dir:
+      type: "string"
+      default: "./cli-test-output"
+      description: "ベース出力ディレクトリ"
+    structure:
+      type: "object"
+      description: "ディレクトリ構造"
+      properties:
+        tests:
+          type: "string"
+          default: "tests"
+          description: "生成テストファイル格納ディレクトリ"
+        reports:
+          type: "string"
+          default: "reports"
+          description: "レポート出力ディレクトリ"
+        docker_results:
+          type: "string"
+          default: "docker-results"
+          description: "Docker実行結果ディレクトリ"
+
+# ログ設定
+logging:
+  description: "ロギング動作設定"
+  type: "object"
+  properties:
+    level:
+      type: "string"
+      default: "INFO"
+      allowed_values:
+        - "DEBUG"
+        - "INFO"
+        - "WARN"
+        - "ERROR"
+      description: "デフォルトログレベル"
+    enable_colors:
+      type: "boolean"
+      default: true
+      description: "ログの色付け有効化"
+    timestamp_format:
+      type: "string"
+      default: "%Y-%m-%d %H:%M:%S"
+      description: "タイムスタンプフォーマット"
+
+# 環境変数オーバーライド設定
+environment_overrides:
+  description: "環境変数による設定上書きマッピング"
+  type: "object"
+  mappings:
+    CLI_TEST_MODULES: "test_modules"
+    CLI_TEST_REPORT_FORMAT: "report_format"
+    CLI_TEST_DOCKER_ENABLED: "docker.enabled"
+    CLI_TEST_DOCKER_ENVIRONMENTS: "docker.environments"
+    CLI_TEST_LOG_LEVEL: "logging.level"
+    CLI_TEST_OUTPUT_DIR: "output.base_dir"
+    CLI_TEST_TIMEOUT: "timeouts.test_execution"
+    CLI_TEST_DOCKER_TIMEOUT: "timeouts.docker_container"
