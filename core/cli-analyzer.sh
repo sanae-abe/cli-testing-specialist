@@ -20,13 +20,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # 依存ファイルの読み込み
 source "$SCRIPT_DIR/../utils/logger.sh"
+source "$SCRIPT_DIR/../utils/i18n-loader.sh"
 source "$SCRIPT_DIR/validator.sh"
+
+# i18n初期化
+load_i18n_once
 
 # jqの存在確認（フォールバック対応）
 if ! command -v jq &>/dev/null; then
-    log ERROR "jq is required but not installed"
-    log ERROR "  Install: brew install jq  (macOS)"
-    log ERROR "          apt-get install jq  (Ubuntu/Debian)"
+    log ERROR "$(msg jq_not_installed)"
+    log ERROR "$(msg jq_install_instruction)"
     exit 1
 fi
 
@@ -35,63 +38,62 @@ analyze_cli_tool() {
     local cli_binary="$1"
     local output_file="${2:-cli-analysis.json}"
 
-    log INFO "Starting CLI tool analysis"
-    log DEBUG "Input binary: $cli_binary"
-    log DEBUG "Output file: $output_file"
+    log INFO "$(msg cli_analysis_started)"
+    log DEBUG "$(msg input_binary "$cli_binary")"
+    log DEBUG "$(msg output_file "$output_file")"
 
     # 入力バリデーション（セキュリティ強化）
     local validated_binary
     validated_binary=$(validate_cli_binary "$cli_binary") || {
-        log ERROR "Binary validation failed"
+        log ERROR "$(msg binary_validation_failed)"
         return 1
     }
 
-    log INFO "Analyzing CLI tool: $validated_binary"
+    log INFO "$(msg analyzing_cli_tool "$validated_binary")"
 
     # メインヘルプ解析（タイムアウト付き）
     local main_help
-    log DEBUG "Fetching main help..."
+    log DEBUG "$(msg fetching_main_help)"
     main_help=$(timeout 10 "$validated_binary" --help 2>&1) || {
         local exit_code=$?
         if [[ $exit_code -eq 124 ]]; then
-            log ERROR "Timeout while getting help from $validated_binary"
+            log ERROR "$(msg timeout_getting_help "$validated_binary")"
         else
-            log WARN "Failed to get help (exit code: $exit_code)"
-            log WARN "  Some CLIs may not support --help"
+            log WARN "$(msg failed_to_get_help "$exit_code")"
         fi
         main_help=""
     }
 
     if [[ -z "$main_help" ]]; then
-        log WARN "No help output received, trying --version"
+        log WARN "$(msg no_help_output)"
         main_help=$(timeout 5 "$validated_binary" --version 2>&1) || main_help="No help available"
     fi
 
     # サブコマンド抽出
-    log DEBUG "Extracting subcommands..."
+    log DEBUG "$(msg extracting_subcommands)"
     local subcommands
     subcommands=$(extract_subcommands "$main_help")
     local subcommand_count
     subcommand_count=$(echo "$subcommands" | jq 'length')
-    log INFO "Detected $subcommand_count subcommands"
+    log INFO "$(msg detected_subcommands "$subcommand_count")"
     log DEBUG "Subcommands: $(echo "$subcommands" | jq -c '.')"
 
     # オプション抽出
-    log DEBUG "Extracting options..."
+    log DEBUG "$(msg extracting_options)"
     local options
     options=$(extract_options "$main_help")
     local option_count
     option_count=$(echo "$options" | jq 'length')
-    log INFO "Detected $option_count options"
+    log INFO "$(msg detected_options "$option_count")"
     log DEBUG "Options: $(echo "$options" | jq -c '.')"
 
     # 再帰的にサブコマンドを解析（修正版：プロセス置換使用）
-    log INFO "Building command tree (max depth: 3)..."
+    log INFO "$(msg building_command_tree 3)"
     local command_tree
     command_tree=$(build_command_tree "$validated_binary" "$subcommands" 3)
 
     # JSON出力
-    log DEBUG "Generating JSON analysis..."
+    log DEBUG "$(msg generating_json_analysis)"
     local agent_version
     agent_version=$(cat "$SCRIPT_DIR/../VERSION" 2>/dev/null || echo "1.1.0-dev")
 
@@ -114,7 +116,7 @@ analyze_cli_tool() {
             agent_version: $version
         }' > "$output_file"
 
-    log INFO "CLI analysis completed"
+    log INFO "$(msg cli_analysis_completed)"
     log INFO "  Subcommands: $subcommand_count"
     log INFO "  Options: $option_count"
     log INFO "  Output: $output_file"
@@ -200,7 +202,7 @@ build_command_tree() {
 
     # 深さ制限チェック
     if [[ $max_depth -le 0 ]]; then
-        log DEBUG "Max depth reached, returning empty tree"
+        log DEBUG "$(msg max_depth_reached)"
         echo "{}"
         return 0
     fi
@@ -210,23 +212,23 @@ build_command_tree() {
     subcommand_count=$(echo "$subcommands" | jq 'length')
 
     if [[ $subcommand_count -eq 0 ]]; then
-        log DEBUG "No subcommands, returning empty tree"
+        log DEBUG "$(msg no_subcommands_empty_tree)"
         echo "{}"
         return 0
     fi
 
-    log DEBUG "Processing $subcommand_count subcommands at depth $max_depth"
+    log DEBUG "$(msg processing_subcommands "$max_depth" "$subcommand_count")"
 
     # プロセス置換を使用してサブシェル問題を回避（重要な修正）
     while IFS= read -r cmd; do
         [[ -z "$cmd" ]] && continue
 
-        log DEBUG "Analyzing subcommand: $cmd"
+        log DEBUG "$(msg analyzing_subcommand "$cmd")"
 
         # サブコマンドのヘルプを取得（タイムアウト付き）
         local cmd_help
         cmd_help=$(timeout 10 $cli_binary $cmd --help 2>&1) || {
-            log WARN "Failed to get help for subcommand: $cmd"
+            log WARN "$(msg failed_to_get_help_for_subcommand "$cmd")"
             cmd_help=""
         }
 
@@ -240,7 +242,7 @@ build_command_tree() {
         nested_count=$(echo "$nested_subcommands" | jq 'length')
 
         if [[ $max_depth -gt 1 ]] && [[ $nested_count -gt 0 ]]; then
-            log DEBUG "Recursively analyzing '$cmd' (depth=$((max_depth - 1)), nested=$nested_count)"
+            log DEBUG "$(msg recursively_analyzing "$cmd" "$((max_depth - 1))" "$nested_count")"
             nested_tree=$(build_command_tree "$cli_binary $cmd" "$nested_subcommands" $((max_depth - 1)))
         fi
 
@@ -259,7 +261,7 @@ build_command_tree() {
 
     done < <(echo "$subcommands" | jq -r '.[]')  # プロセス置換（修正ポイント）
 
-    log DEBUG "Command tree built successfully"
+    log DEBUG "$(msg command_tree_built)"
     echo "$tree"
 }
 
@@ -280,9 +282,9 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     exit_code=$?
 
     if [[ $exit_code -eq 0 ]]; then
-        log INFO "Analysis completed successfully"
+        log INFO "$(msg analysis_completed_successfully)"
     else
-        log ERROR "Analysis failed with exit code: $exit_code"
+        log ERROR "$(msg analysis_failed "$exit_code")"
     fi
 
     exit $exit_code

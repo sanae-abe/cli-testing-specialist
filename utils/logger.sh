@@ -11,6 +11,11 @@
 
 set -euo pipefail
 
+# i18n サポート
+# shellcheck source=utils/i18n-loader.sh
+source "$(dirname "${BASH_SOURCE[0]}")/i18n-loader.sh"
+load_i18n_once
+
 # ログレベル定義
 declare -gA LOG_LEVELS=([DEBUG]=0 [INFO]=1 [WARN]=2 [ERROR]=3)
 LOG_LEVEL="${CLI_TEST_LOG_LEVEL:-INFO}"
@@ -31,7 +36,8 @@ init_logger() {
     }
     chmod 600 "$LOG_FILE" 2>/dev/null || true
 
-    log DEBUG "Logger initialized: $LOG_FILE"
+    # shellcheck disable=SC2059
+    log DEBUG "$(printf "$(msg logger_initialized)" "$LOG_FILE")"
 }
 
 # ログ出力関数
@@ -97,12 +103,14 @@ set_log_level() {
     local new_level="$1"
 
     if [[ -z "${LOG_LEVELS[$new_level]:-}" ]]; then
-        log WARN "Invalid log level: $new_level (valid: DEBUG, INFO, WARN, ERROR)"
+        # shellcheck disable=SC2059
+        log WARN "$(printf "$(msg invalid_log_level)" "$new_level")"
         return 1
     fi
 
     LOG_LEVEL="$new_level"
-    log INFO "Log level changed to: $LOG_LEVEL"
+    # shellcheck disable=SC2059
+    log INFO "$(printf "$(msg log_level_changed)" "$LOG_LEVEL")"
 }
 
 # ログファイルのローテーション
@@ -116,7 +124,8 @@ rotate_log() {
     local max_size=$((10 * 1024 * 1024))  # 10MB
 
     if [[ $log_size -gt $max_size ]]; then
-        log INFO "Rotating log file (size: $log_size bytes)"
+        # shellcheck disable=SC2059
+        log INFO "$(printf "$(msg rotating_log_file)" "$log_size")"
         mv "$LOG_FILE" "${LOG_FILE}.1" 2>/dev/null || true
         touch "$LOG_FILE"
         chmod 600 "$LOG_FILE" 2>/dev/null || true
