@@ -212,6 +212,72 @@ bash core/run-tests.sh ./generated-tests all ./reports
 
 ---
 
+## テスト実行
+
+### 順次実行 vs 並列実行
+
+**⚠️ 重要**: ディレクトリ走査制限テスト（`10-directory-traversal-limits.bats`）は**順次実行が必須**です。
+
+```bash
+# ✅ 正しい: 順次実行（全テスト推奨）
+bats test-output/*.bats
+
+# ✅ 正しい: ディレクトリ走査テストを個別実行
+bats test-output/10-directory-traversal-limits.bats
+
+# ❌ 間違い: 並列実行はディレクトリ走査テストと競合
+bats --jobs 4 test-output/*.bats  # リソース競合の原因
+```
+
+### なぜ順次実行が必要？
+
+ディレクトリ走査制限テストは**リソース集約的**で以下を作成します:
+- 大量のテストディレクトリ（100、500、1000ファイル）
+- 深いディレクトリ構造（50階層）
+- シンボリックリンクループ
+- リソース制限（2GBメモリ、2048ファイル、100プロセス）
+
+並列実行すると以下の問題が発生:
+- `/tmp` 容量枯渇
+- リソース制限の競合
+- テスト結果の信頼性低下
+- システムパフォーマンス低下
+
+### テストカテゴリ別実行
+
+```bash
+# 特定のテストカテゴリを生成
+bash core/test-generator.sh cli-analysis.json test-output basic,security,path
+
+# 利用可能なカテゴリ:
+# - basic               (基本動作検証)
+# - help                (サブコマンドヘルプ)
+# - security            (セキュリティスキャン)
+# - path                (パス処理)
+# - multi-shell         (Shell互換性)
+# - performance         (パフォーマンステスト)
+# - concurrency         (並行実行)
+# - input-validation    (入力検証 - Phase 2.5)
+# - destructive-ops     (破壊的操作 - Phase 2.5)
+# - directory-traversal (ディレクトリ走査制限 - Phase 2.6)
+# - all                 (全カテゴリ)
+```
+
+### リソース集約テストのスキップ
+
+CI環境で `/tmp` 容量が限られている場合:
+
+```bash
+# ディレクトリ走査テストをスキップ
+export SKIP_DIRECTORY_TRAVERSAL_TESTS=1
+bats test-output/*.bats
+
+# 実行前に /tmp 容量を確認
+df -h /tmp  # 少なくとも100MB以上の空き容量を確保
+```
+
+---
+
 ## CI/CD統合
 
 ### GitHub Actions
@@ -296,6 +362,123 @@ cli-testing-specialist:
 
 ---
 
+## トラブルシューティング
+
+### /tmp 容量不足
+
+ディレクトリ走査テストは多数の一時ファイルを作成します。「デバイスに空き容量がありません」エラーが発生した場合:
+
+```bash
+# /tmp 容量確認
+df -h /tmp
+
+# テストディレクトリを手動クリーンアップ
+rm -rf /tmp/cli-test-*
+
+# 空き容量を増やす（macOS）
+sudo periodic daily weekly monthly
+
+# 空き容量を増やす（Linux）
+sudo apt-get clean  # または yum clean all
+```
+
+**予防策**: ディレクトリ走査テスト実行前に `/tmp` に少なくとも100MB以上の空き容量を確保してください。
+
+### テストクリーンアップ失敗
+
+テストが中断された場合（Ctrl+C、システムクラッシュ）、一時ディレクトリが残る可能性があります:
+
+```bash
+# 孤立したテストディレクトリを一覧表示
+ls -la /tmp/cli-test-*
+
+# 安全なクリーンアップ（テストディレクトリのみ削除）
+find /tmp -maxdepth 1 -type d -name "cli-test-*" -mtime +1 -exec rm -rf {} \;
+
+# 強制クリーンアップ（注意して使用）
+rm -rf /tmp/cli-test-*
+```
+
+**注意**: テストクリーンアップは `trap` ハンドラで自動実行されますが、中断時にファイルが残る場合があります。
+
+### Bash バージョン問題
+
+ディレクトリ走査とi18n機能は **Bash 4.0+**（連想配列対応）が必要です:
+
+```bash
+# Bash バージョン確認
+bash --version
+
+# macOS（デフォルトは Bash 3.2）
+brew install bash
+which bash  # /usr/local/bin/bash または /opt/homebrew/bin/bash
+
+# Homebrew Bash を明示的に使用
+/usr/local/bin/bash core/cli-analyzer.sh /usr/bin/curl
+
+# デフォルトシェル変更（オプション）
+sudo bash -c 'echo /usr/local/bin/bash >> /etc/shells'
+chsh -s /usr/local/bin/bash
+```
+
+**GitHub Actions**: CI は macOS ランナーで自動的に Homebrew Bash を使用します。
+
+### メモリ・リソース制限エラー
+
+「メモリを割り当てできません」や「開いているファイルが多すぎます」エラーが発生した場合:
+
+```bash
+# 現在の制限確認
+ulimit -a
+
+# ファイルディスクリプタ制限を増やす（一時的）
+ulimit -n 4096
+
+# 仮想メモリ増加（Linux）
+sudo sysctl -w vm.max_map_count=262144
+
+# macOS: /etc/launchd.conf で制限を増やす
+echo "limit maxfiles 4096 unlimited" | sudo tee -a /etc/launchd.conf
+```
+
+**注意**: ディレクトリ走査テストは自動的にリソース制限を設定します（`ulimit -m 2097152`）。
+
+### BATS 構文エラー
+
+BATS ファイルを `bash -n` でチェックすると構文エラーが表示される場合:
+
+```bash
+# ❌ 間違い: bash -n は BATS 構文を理解しない
+bash -n test-output/10-directory-traversal-limits.bats
+# エラー: 予期しないトークン `}' 周辺に構文エラーがあります
+
+# ✅ 正しい: BATS でテストを実行
+bats test-output/10-directory-traversal-limits.bats
+```
+
+**説明**: BATS は `@test` 構文を使用し、BATS 前処理が必要です。標準 `bash -n` では BATS ファイルを解析できません。
+
+### i18n メッセージが見つからない
+
+「Message key not found」エラーが表示される場合:
+
+```bash
+# 言語設定確認
+echo $LANG
+echo $CLI_TEST_LANG
+
+# i18n ファイルの存在確認
+ls -la i18n/ja.sh i18n/en.sh
+
+# 特定の言語を強制指定
+CLI_TEST_LANG=en bash core/cli-analyzer.sh /usr/bin/curl
+
+# i18n 読み込みデバッグ
+CLI_TEST_LOG_LEVEL=DEBUG bash core/cli-analyzer.sh /usr/bin/curl
+```
+
+---
+
 ## サンプルレポート
 
 サンプルテストとレポートを生成して確認できます:
@@ -336,6 +519,7 @@ MIT License
   - [`REPORT-FORMATS.md`](docs/REPORT-FORMATS.md) - レポート形式詳細ガイド
   - [`INPUT-VALIDATION-GUIDE.md`](docs/INPUT-VALIDATION-GUIDE.md) - 入力検証ガイド
   - [`INPUT-VALIDATION-PLAN-v2.md`](docs/INPUT-VALIDATION-PLAN-v2.md) - Phase 2.5実装計画
+  - [`DIRECTORY-TRAVERSAL-LIMITS-DESIGN.md`](docs/DIRECTORY-TRAVERSAL-LIMITS-DESIGN.md) - Phase 2.6設計ドキュメント 🆕
   - [`PHASE2-PLAN.md`](docs/PHASE2-PLAN.md) - Phase 2実装計画
   - [`PHASE25-FINAL-REPORT.md`](docs/PHASE25-FINAL-REPORT.md) - Phase 2.5最終レポート
 - **Issues**: GitHub Issues

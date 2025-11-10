@@ -212,6 +212,72 @@ For details, see [`docs/REPORT-FORMATS.md`](docs/REPORT-FORMATS.md).
 
 ---
 
+## Test Execution
+
+### Sequential vs Parallel Execution
+
+**⚠️ IMPORTANT**: Directory Traversal Limits tests (`10-directory-traversal-limits.bats`) **must run sequentially**.
+
+```bash
+# ✅ CORRECT: Sequential execution (recommended for all tests)
+bats test-output/*.bats
+
+# ✅ CORRECT: Run directory-traversal tests separately
+bats test-output/10-directory-traversal-limits.bats
+
+# ❌ WRONG: Parallel execution conflicts with directory-traversal tests
+bats --jobs 4 test-output/*.bats  # Will cause resource conflicts
+```
+
+### Why Sequential Execution?
+
+Directory Traversal Limits tests are **resource-intensive** and create:
+- Large test directories (100, 500, 1000 files)
+- Deep directory structures (50 levels)
+- Symlink loops
+- Resource limits (2GB memory, 2048 files, 100 processes)
+
+Running these tests in parallel can cause:
+- `/tmp` space exhaustion
+- Resource limit conflicts
+- Unreliable test results
+- System performance degradation
+
+### Test Category Execution
+
+```bash
+# Generate specific test categories
+bash core/test-generator.sh cli-analysis.json test-output basic,security,path
+
+# Available categories:
+# - basic               (basic validation)
+# - help                (subcommand help)
+# - security            (security scanning)
+# - path                (path handling)
+# - multi-shell         (shell compatibility)
+# - performance         (performance tests)
+# - concurrency         (concurrent execution)
+# - input-validation    (input validation - Phase 2.5)
+# - destructive-ops     (destructive operations - Phase 2.5)
+# - directory-traversal (directory traversal limits - Phase 2.6)
+# - all                 (all categories)
+```
+
+### Skipping Resource-Intensive Tests
+
+In CI environments with limited `/tmp` space:
+
+```bash
+# Skip directory-traversal tests
+export SKIP_DIRECTORY_TRAVERSAL_TESTS=1
+bats test-output/*.bats
+
+# Check /tmp capacity before running
+df -h /tmp  # Ensure at least 100MB free space
+```
+
+---
+
 ## CI/CD Integration
 
 ### GitHub Actions
@@ -296,6 +362,123 @@ For details, refer to `config/schema.yaml`.
 
 ---
 
+## Troubleshooting
+
+### /tmp Space Exhausted
+
+Directory traversal tests create many temporary files. If tests fail with "No space left on device":
+
+```bash
+# Check /tmp space
+df -h /tmp
+
+# Clean up test directories manually
+rm -rf /tmp/cli-test-*
+
+# Free up space (macOS)
+sudo periodic daily weekly monthly
+
+# Free up space (Linux)
+sudo apt-get clean  # or yum clean all
+```
+
+**Prevention**: Ensure at least 100MB free in `/tmp` before running directory-traversal tests.
+
+### Test Cleanup Failures
+
+If tests are interrupted (Ctrl+C, system crash), temporary directories may remain:
+
+```bash
+# List orphaned test directories
+ls -la /tmp/cli-test-*
+
+# Safe cleanup (removes only test directories)
+find /tmp -maxdepth 1 -type d -name "cli-test-*" -mtime +1 -exec rm -rf {} \;
+
+# Force cleanup (use with caution)
+rm -rf /tmp/cli-test-*
+```
+
+**Note**: Test cleanup is automatic via `trap` handlers, but interruptions may leave files.
+
+### Bash Version Issues
+
+Directory traversal and i18n features require **Bash 4.0+** (for associative arrays):
+
+```bash
+# Check Bash version
+bash --version
+
+# macOS (default Bash 3.2)
+brew install bash
+which bash  # /usr/local/bin/bash or /opt/homebrew/bin/bash
+
+# Use Homebrew Bash explicitly
+/usr/local/bin/bash core/cli-analyzer.sh /usr/bin/curl
+
+# Update default shell (optional)
+sudo bash -c 'echo /usr/local/bin/bash >> /etc/shells'
+chsh -s /usr/local/bin/bash
+```
+
+**GitHub Actions**: CI automatically uses Homebrew Bash on macOS runners.
+
+### Memory/Resource Limit Errors
+
+If tests fail with "Cannot allocate memory" or "Too many open files":
+
+```bash
+# Check current limits
+ulimit -a
+
+# Increase file descriptor limit (temporary)
+ulimit -n 4096
+
+# Increase virtual memory (Linux)
+sudo sysctl -w vm.max_map_count=262144
+
+# macOS: Increase limits in /etc/launchd.conf
+echo "limit maxfiles 4096 unlimited" | sudo tee -a /etc/launchd.conf
+```
+
+**Note**: Directory traversal tests set resource limits automatically (`ulimit -m 2097152`).
+
+### BATS Syntax Errors
+
+If you see syntax errors when checking BATS files with `bash -n`:
+
+```bash
+# ❌ WRONG: bash -n doesn't understand BATS syntax
+bash -n test-output/10-directory-traversal-limits.bats
+# Error: unexpected token `}' near `@test'
+
+# ✅ CORRECT: Use BATS to run tests
+bats test-output/10-directory-traversal-limits.bats
+```
+
+**Explanation**: BATS uses `@test` syntax that requires BATS preprocessing. Standard `bash -n` cannot parse BATS files.
+
+### i18n Message Not Found
+
+If you see "Message key not found" errors:
+
+```bash
+# Check language setting
+echo $LANG
+echo $CLI_TEST_LANG
+
+# Verify i18n files exist
+ls -la i18n/ja.sh i18n/en.sh
+
+# Force specific language
+CLI_TEST_LANG=en bash core/cli-analyzer.sh /usr/bin/curl
+
+# Debug i18n loading
+CLI_TEST_LOG_LEVEL=DEBUG bash core/cli-analyzer.sh /usr/bin/curl
+```
+
+---
+
 ## Sample Reports
 
 You can generate and review sample tests and reports:
@@ -336,6 +519,7 @@ Pull requests are welcome. For major changes, please open an issue first to disc
   - [`REPORT-FORMATS.md`](docs/REPORT-FORMATS.md) - Detailed report format guide
   - [`INPUT-VALIDATION-GUIDE.md`](docs/INPUT-VALIDATION-GUIDE.md) - Input validation guide
   - [`INPUT-VALIDATION-PLAN-v2.md`](docs/INPUT-VALIDATION-PLAN-v2.md) - Phase 2.5 implementation plan
+  - [`DIRECTORY-TRAVERSAL-LIMITS-DESIGN.md`](docs/DIRECTORY-TRAVERSAL-LIMITS-DESIGN.md) - Phase 2.6 design document 🆕
   - [`PHASE2-PLAN.md`](docs/PHASE2-PLAN.md) - Phase 2 implementation plan
   - [`PHASE25-FINAL-REPORT.md`](docs/PHASE25-FINAL-REPORT.md) - Phase 2.5 final report
 - **Issues**: GitHub Issues
