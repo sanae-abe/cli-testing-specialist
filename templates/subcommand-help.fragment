@@ -1,0 +1,13 @@
+@test "[${TEST_MODULE}] subcommand '${SUBCOMMAND}' has help" {
+    run "${CLI_BINARY}" ${SUBCOMMAND} --help
+    [ "\$status" -eq 0 ]
+    [ -n "\$output" ]
+}
+
+@test "[${TEST_MODULE}] subcommand '${SUBCOMMAND}' help contains usage information" {
+    run "${CLI_BINARY}" ${SUBCOMMAND} --help
+    [ "\$status" -eq 0 ]
+    # Check for common help patterns
+    echo "\$output" | grep -qiE "(usage|options|commands|examples)" || \
+    echo "\$output" | grep -qE "^[[:space:]]+-"  # Option flags
+}
