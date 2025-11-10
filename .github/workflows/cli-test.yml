@@ -73,25 +73,48 @@ jobs:
             bash core/validator.sh
           fi
 
-      - name: Generate test files (if needed)
+      - name: Generate CLI tests from real tools
         run: |
-          if [ ! -d "generated-tests" ]; then
-            mkdir -p generated-tests
-            echo "#!/usr/bin/env bats" > generated-tests/sample.bats
-            echo "# Sample test for CI" >> generated-tests/sample.bats
-            echo "@test 'sample test passes' {" >> generated-tests/sample.bats
-            echo "  run echo 'hello'" >> generated-tests/sample.bats
-            echo "  [ \"\$status\" -eq 0 ]" >> generated-tests/sample.bats
-            echo "}" >> generated-tests/sample.bats
+          mkdir -p generated-tests
+
+          # Set environment variables for CLI analysis
+          export CLI_TEST_ALLOW_SYSTEM_BINARIES=true
+
+          # Detect curl location
+          CURL_PATH=$(which curl)
+
+          if [ "$RUNNER_OS" == "macOS" ]; then
+            # Use Homebrew bash for macOS
+            BASH_CMD="$(brew --prefix)/bin/bash"
+          else
+            BASH_CMD="bash"
           fi
+
+          # Analyze curl CLI tool
+          echo "Analyzing curl at $CURL_PATH..."
+          $BASH_CMD core/cli-analyzer.sh "$CURL_PATH" curl-analysis.json
+
+          # Generate comprehensive tests for curl
+          echo "Generating tests for curl..."
+          $BASH_CMD core/test-generator.sh curl-analysis.json generated-tests all
+
+          # Show generated test files
+          echo "Generated test files:"
+          ls -lh generated-tests/
 
       - name: Run BATS tests
         run: |
           SHELL_CMD=${{ matrix.shell }}
+
+          # Check if test files exist
           if [ ! -d "generated-tests" ] || [ -z "$(ls -A generated-tests/*.bats 2>/dev/null)" ]; then
             echo "No test files found, skipping test execution"
             exit 0
           fi
+
+          # Count test files
+          TEST_COUNT=$(ls -1 generated-tests/*.bats 2>/dev/null | wc -l)
+          echo "Found $TEST_COUNT test file(s)"
 
           # Run tests with all report formats
           if [ "$RUNNER_OS" == "macOS" ]; then
@@ -99,6 +122,12 @@ jobs:
             $(brew --prefix)/bin/bash core/run-tests.sh generated-tests all ./test-reports
           else
             bash core/run-tests.sh generated-tests all ./test-reports
+          fi
+
+          # Show report summary
+          if [ -f "test-reports/test-report.json" ]; then
+            echo "Test Results Summary:"
+            jq -r '.summary' test-reports/test-report.json
           fi
 
       - name: Upload test results
