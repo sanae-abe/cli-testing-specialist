@@ -1,0 +1,62 @@
+version: 2
+updates:
+  # Cargo dependencies
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "sanae-abe"
+    labels:
+      - "dependencies"
+      - "rust"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    groups:
+      # セキュリティ関連を優先グループ化
+      security:
+        patterns:
+          - "tokio"
+          - "serde*"
+          - "regex"
+        update-types:
+          - "minor"
+          - "patch"
+      # CLI関連をグループ化
+      cli:
+        patterns:
+          - "clap*"
+          - "colored"
+          - "indicatif"
+        update-types:
+          - "patch"
+      # 開発依存関係をグループ化
+      dev-dependencies:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # メジャーバージョンアップは手動確認
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(ci)"

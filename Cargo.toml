@@ -1,0 +1,76 @@
+[package]
+name = "cli-testing-specialist"
+version = "1.0.1"
+authors = ["Sanae Abe <sanae.abe@example.com>"]
+edition = "2021"
+license = "MIT"
+description = "Comprehensive testing framework for CLI tools - automated analysis, test generation, and security validation"
+repository = "https://github.com/sanae-abe/cli-testing-specialist"
+keywords = ["cli", "testing", "security", "automation", "bats"]
+categories = ["command-line-utilities", "development-tools::testing"]
+readme = "README.md"
+
+[dependencies]
+# CLI parsing
+clap = { version = "4.5", features = ["derive"] }
+clap_complete = "4.5"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yml = "0.0.12"
+
+# Async runtime
+tokio = { version = "1.35", features = ["rt-multi-thread", "macros", "time", "sync"] }
+
+# Parallel processing
+rayon = "1.8"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Regex
+regex = "1.10"
+lazy_static = "1.4"
+
+# Time/Date
+chrono = { version = "0.4", features = ["serde"] }
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+# Terminal colors
+colored = "2.1"
+
+# Progress indicators
+indicatif = "0.17"
+
+# System information
+hostname = "0.4"
+
+# Unix system calls (for resource limits)
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+# Integration testing
+assert_cmd = "2.0"
+predicates = "3.0"
+tempfile = "3.8"
+
+# Property-based testing
+proptest = "1.4"
+
+# Benchmarking
+criterion = "0.5"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+
+[[bench]]
+name = "benchmark"
+harness = false

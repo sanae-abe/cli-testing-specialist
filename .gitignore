@@ -55,6 +55,7 @@ test-output-*/
 cli-test-output/
 shell-detection.json
 todos.md
+todo.md
 
 # Integration test directories (Phase 2)
 *-integration-test/
@@ -63,3 +64,10 @@ profile-integration-test/
 baseline-integration-test/
 security-integration-test/
 combined-integration-test/
+
+
+# Rust
+/target
+Cargo.lock
+**/*.rs.bk
+*.pdb

@@ -1,0 +1,180 @@
+name: Test and Publish Reports
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Run Tests
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        shell: [bash, zsh]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Install BATS
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo apt-get update
+            sudo apt-get install -y bats
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            brew install bats-core
+          fi
+
+      - name: Build cli-testing-specialist
+        run: cargo build --release
+
+      - name: Install cli-testing-specialist
+        run: cargo install --path .
+
+      - name: Verify installation
+        run: cli-testing-specialist --version
+
+      - name: Analyze curl
+        run: cli-testing-specialist analyze /usr/bin/curl -o curl-analysis.json
+
+      - name: Generate tests (skip destructive-ops and directory-traversal)
+        run: |
+          cli-testing-specialist generate curl-analysis.json -o curl-tests -c all
+
+      - name: Run tests with custom timeout
+        run: |
+          cli-testing-specialist run curl-tests \
+            -f all \
+            -o reports-${{ matrix.os }}-${{ matrix.shell }} \
+            --timeout 60 \
+            --skip destructive-ops,directory-traversal
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}-${{ matrix.shell }}
+          path: reports-${{ matrix.os }}-${{ matrix.shell }}/
+          retention-days: 30
+
+      - name: Upload HTML report for Pages
+        if: matrix.os == 'ubuntu-latest' && matrix.shell == 'bash'
+        uses: actions/upload-artifact@v4
+        with:
+          name: html-report
+          path: reports-${{ matrix.os }}-${{ matrix.shell }}/*.html
+          retention-days: 90
+
+  publish:
+    name: Publish to GitHub Pages
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download HTML report
+        uses: actions/download-artifact@v4
+        with:
+          name: html-report
+          path: public/
+
+      - name: Create index page
+        run: |
+          cat > public/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>CLI Testing Specialist - Test Reports</title>
+            <style>
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 2rem;
+                background: #f5f5f5;
+              }
+              h1 { color: #2c3e50; }
+              .report-card {
+                background: white;
+                border-radius: 8px;
+                padding: 1.5rem;
+                margin: 1rem 0;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+              }
+              .report-card a {
+                color: #3498db;
+                text-decoration: none;
+                font-weight: 600;
+              }
+              .report-card a:hover {
+                text-decoration: underline;
+              }
+              .meta {
+                color: #7f8c8d;
+                font-size: 0.9rem;
+                margin-top: 0.5rem;
+              }
+            </style>
+          </head>
+          <body>
+            <h1>🧪 CLI Testing Specialist - Test Reports</h1>
+            <p>Automated test reports for CLI tools. Updated on every commit to main branch.</p>
+
+            <div class="report-card">
+              <h2><a href="curl-tests-report.html">📊 curl Test Report</a></h2>
+              <p>Comprehensive test suite for curl CLI tool</p>
+              <div class="meta">
+                Generated: $(date -u +"%Y-%m-%d %H:%M UTC") |
+                Branch: ${GITHUB_REF#refs/heads/} |
+                Commit: ${GITHUB_SHA:0:7}
+              </div>
+            </div>
+
+            <hr style="margin: 2rem 0; border: none; border-top: 1px solid #ddd;">
+
+            <p style="color: #7f8c8d; text-align: center;">
+              Powered by
+              <a href="https://github.com/sanae-abe/cli-testing-specialist"
+                 style="color: #3498db;">cli-testing-specialist</a>
+            </p>
+          </body>
+          </html>
+          EOF
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact for Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'public/'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
