@@ -57,6 +57,14 @@ shell-detection.json
 todos.md
 todo.md
 
+# Security: Prevent accidental commit of analysis results
+# (may contain sensitive information from CLI help output)
+*-analysis.json
+*-test.json
+*.secret.json
+reports/*.json
+reports/*.html
+
 # Integration test directories (Phase 2)
 *-integration-test/
 coverage-integration-test/

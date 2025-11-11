@@ -57,6 +57,11 @@ pub enum Commands {
         /// Test categories to generate (comma-separated or "all")
         #[arg(short, long, default_value = "all")]
         categories: String,
+
+        /// Include resource-intensive tests (directory-traversal, large-scale performance)
+        /// These tests may require significant /tmp space and memory
+        #[arg(long)]
+        include_intensive: bool,
     },
 
     /// Run BATS tests and generate reports

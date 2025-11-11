@@ -143,6 +143,35 @@ impl TestCategory {
             Self::Performance,
         ]
     }
+
+    /// Get default categories (excludes resource-intensive tests)
+    ///
+    /// Excludes:
+    /// - DirectoryTraversal: Requires significant /tmp space (100MB+) and creates many files
+    ///
+    /// Use `--include-intensive` flag to include these categories
+    pub fn default() -> Vec<TestCategory> {
+        vec![
+            Self::Basic,
+            Self::Help,
+            Self::Security,
+            Self::Path,
+            Self::MultiShell,
+            Self::InputValidation,
+            Self::DestructiveOps,
+            Self::Performance,
+        ]
+    }
+
+    /// Get resource-intensive test categories
+    ///
+    /// These tests require:
+    /// - Significant /tmp disk space (100MB+)
+    /// - Higher memory limits (2GB+)
+    /// - More execution time
+    pub fn intensive() -> Vec<TestCategory> {
+        vec![Self::DirectoryTraversal]
+    }
 }
 
 /// Error type for parsing TestCategory from string

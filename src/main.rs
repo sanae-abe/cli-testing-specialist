@@ -78,6 +78,7 @@ fn main() -> Result<()> {
             analysis,
             output,
             categories,
+            include_intensive,
         } => {
             log::info!("Generating tests from: {}", analysis.display());
 
@@ -92,9 +93,13 @@ fn main() -> Result<()> {
             );
 
             // 2. Parse categories
-            let selected_categories = parse_categories(&categories)?;
+            let selected_categories = parse_categories(&categories, include_intensive)?;
             let num_categories = selected_categories.len();
             log::info!("Selected {} test categories", num_categories);
+
+            if !include_intensive {
+                log::info!("Excluding resource-intensive tests (use --include-intensive to enable)");
+            }
 
             // 3. Generate test cases
             let generator = TestGenerator::new(cli_analysis.clone(), selected_categories);
@@ -291,9 +296,14 @@ fn main() -> Result<()> {
 }
 
 /// Parse test categories from comma-separated string or "all"
-fn parse_categories(categories_str: &str) -> Result<Vec<TestCategory>> {
+fn parse_categories(categories_str: &str, include_intensive: bool) -> Result<Vec<TestCategory>> {
     if categories_str.trim().to_lowercase() == "all" {
-        return Ok(TestCategory::all());
+        // "all" respects the include_intensive flag
+        return if include_intensive {
+            Ok(TestCategory::all())
+        } else {
+            Ok(TestCategory::default())
+        };
     }
 
     let mut categories = Vec::new();
@@ -312,6 +322,16 @@ fn parse_categories(categories_str: &str) -> Result<Vec<TestCategory>> {
                         .join(", ")
                 ))
             })?;
+
+            // Filter out intensive tests if not explicitly included
+            if !include_intensive && TestCategory::intensive().contains(&category) {
+                log::warn!(
+                    "Skipping resource-intensive category '{}' (use --include-intensive to enable)",
+                    category.as_str()
+                );
+                continue;
+            }
+
             categories.push(category);
         }
     }
