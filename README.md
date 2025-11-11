@@ -2,7 +2,7 @@
 
 **Languages**: [English](README.md) | [日本語](README.ja.md)
 
-**Version**: 1.0.2
+**Version**: 1.0.3
 **Last Updated**: 2025-01-12
 **Status**: Production Ready
 **License**: MIT
@@ -415,6 +415,20 @@ For major changes, please open an issue first to discuss the proposed changes.
 ---
 
 ## Changelog
+
+### v1.0.3 (2025-01-12)
+
+**Critical Security Test Fix** 🔒:
+- Fixed security test design to accept **any non-zero exit code** (not just exit code 1)
+- Changed `expected_exit: i32` → `Option<i32>` to support flexible exit code validation
+- Added `.expect_nonzero_exit()` method for security tests
+- Now correctly handles Unix convention: exit code 2 for command-line usage errors (clap/commander/argparse standard)
+- Affects: command injection, null byte injection, path traversal tests
+- **Breaking Change**: But necessary fix for incorrect test design
+
+**Impact**:
+- cldev, cmdrun, package-publisher security tests now pass correctly (they return exit code 2)
+- BATS generation: `[ "$status" -ne 0 ]` instead of `[ "$status" -eq 1 ]`
 
 ### v1.0.2 (2025-01-12)
 
