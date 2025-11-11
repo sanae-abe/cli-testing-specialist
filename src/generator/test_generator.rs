@@ -173,11 +173,22 @@ impl TestGenerator {
     }
 
     /// Generate security scanner tests
+    ///
+    /// **IMPORTANT**: Security tests MUST expect non-zero exit codes for malicious inputs.
+    /// A tool that accepts malicious input (exit code 0) is vulnerable.
+    ///
+    /// # Security Test Philosophy
+    ///
+    /// - **Injection attacks**: Tool MUST reject with non-zero exit code
+    /// - **Null bytes**: Tool MUST reject with non-zero exit code
+    /// - **Path traversal**: Tool MUST reject with non-zero exit code
+    /// - **Buffer overflow**: Tool MUST handle gracefully (may succeed if sanitized)
     fn generate_security_tests(&self) -> Result<Vec<TestCase>> {
         let mut tests = Vec::new();
         let binary = &self.analysis.binary_name;
 
         // Test 1: Command injection via option
+        // MUST reject malicious input (exit code != 0)
         tests.push(
             TestCase::new(
                 "security-001".to_string(),
@@ -185,11 +196,13 @@ impl TestGenerator {
                 TestCategory::Security,
                 format!("{} --name 'test; rm -rf /'", binary),
             )
+            .with_exit_code(1) // Expect rejection (non-zero exit code)
             .with_tag("injection".to_string())
             .with_tag("critical".to_string()),
         );
 
         // Test 2: Null byte injection
+        // MUST reject malicious input (exit code != 0)
         tests.push(
             TestCase::new(
                 "security-002".to_string(),
@@ -197,11 +210,13 @@ impl TestGenerator {
                 TestCategory::Security,
                 format!(r#"{} --file $'/tmp/test\x00malicious'"#, binary),
             )
+            .with_exit_code(1) // Expect rejection (non-zero exit code)
             .with_tag("injection".to_string())
             .with_tag("critical".to_string()),
         );
 
         // Test 3: Path traversal
+        // MUST reject path traversal attempt (exit code != 0)
         tests.push(
             TestCase::new(
                 "security-003".to_string(),
@@ -209,11 +224,13 @@ impl TestGenerator {
                 TestCategory::Security,
                 format!("{} --file ../../../etc/passwd", binary),
             )
+            .with_exit_code(1) // Expect rejection (non-zero exit code)
             .with_tag("path-traversal".to_string())
             .with_tag("critical".to_string()),
         );
 
         // Test 4: Long input (buffer overflow test)
+        // This is informational - tool may succeed if input is properly sanitized
         let long_input = "A".repeat(10000);
         tests.push(
             TestCase::new(
@@ -222,7 +239,10 @@ impl TestGenerator {
                 TestCategory::Security,
                 format!("{} --name '{}'", binary, long_input),
             )
-            .with_tag("buffer-overflow".to_string()),
+            // No exit code expectation - this is informational
+            // Tool may succeed (0) if properly sanitized, or fail (1) if rejected
+            .with_tag("buffer-overflow".to_string())
+            .with_tag("informational".to_string()),
         );
 
         Ok(tests)
