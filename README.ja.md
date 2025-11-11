@@ -192,10 +192,13 @@ open reports/tests-report.html
 ```
 
 **HTML機能**:
-- モダンなレスポンシブデザイン
-- リアルタイム検索とフィルタリング
-- テスト状態の可視化
-- ワンクリックナビゲーション
+- 📊 視覚的な統計カード（Passed/Failed/Skipped/Duration）
+- 📈 成功率を表示するプログレスバー
+- 📋 テストスイート別の詳細な結果表示
+- 🎨 クリーンでプロフェッショナルなデザイン（Bootstrap 5）
+- 🚀 CDN依存なし（埋め込みCSS）
+- 📱 完全レスポンシブレイアウト
+- ⚡ 自己完結型HTMLによる高速ロード
 
 ### 4. JUnit XML形式（`.xml`）
 CI/CD統合（GitHub Actions、GitLab CI、Jenkins）

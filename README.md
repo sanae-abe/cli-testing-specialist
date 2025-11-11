@@ -192,10 +192,13 @@ open reports/tests-report.html
 ```
 
 **HTML Features**:
-- Modern responsive design
-- Real-time search and filtering
-- Test status visualization
-- One-click navigation
+- 📊 Visual statistics cards (Passed/Failed/Skipped/Duration)
+- 📈 Progress bar showing success rate
+- 📋 Test suite breakdown with detailed results
+- 🎨 Clean, professional design (Bootstrap 5)
+- 🚀 Zero CDN dependencies (embedded CSS)
+- 📱 Fully responsive layout
+- ⚡ Fast loading with self-contained HTML
 
 ### 4. JUnit XML Format (`.xml`)
 CI/CD integration (GitHub Actions, GitLab CI, Jenkins)
