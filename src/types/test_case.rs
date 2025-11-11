@@ -18,7 +18,9 @@ pub struct TestCase {
     pub command: String,
 
     /// Expected exit code
-    pub expected_exit: i32,
+    /// - `Some(n)`: Expect specific exit code n
+    /// - `None`: Expect any non-zero exit code (for security tests)
+    pub expected_exit: Option<i32>,
 
     /// Assertions to verify
     pub assertions: Vec<Assertion>,
@@ -88,7 +90,7 @@ impl TestCase {
             name,
             category,
             command,
-            expected_exit: 0, // Default to success
+            expected_exit: Some(0), // Default to success
             assertions: Vec::new(),
             tags: Vec::new(),
         }
@@ -108,7 +110,13 @@ impl TestCase {
 
     /// Set expected exit code
     pub fn with_exit_code(mut self, code: i32) -> Self {
-        self.expected_exit = code;
+        self.expected_exit = Some(code);
+        self
+    }
+
+    /// Expect any non-zero exit code (for security tests)
+    pub fn expect_nonzero_exit(mut self) -> Self {
+        self.expected_exit = None;
         self
     }
 }
@@ -223,7 +231,7 @@ mod tests {
         .with_tag("basic".to_string());
 
         assert_eq!(test.id, "basic-001");
-        assert_eq!(test.expected_exit, 0);
+        assert_eq!(test.expected_exit, Some(0));
         assert_eq!(test.assertions.len(), 1);
         assert_eq!(test.tags.len(), 1);
     }

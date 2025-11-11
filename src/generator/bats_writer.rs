@@ -190,7 +190,10 @@ impl BatsWriter {
 
         // Write exit code assertion
         writeln!(writer, "    # Assert exit code")?;
-        writeln!(writer, "    [ \"$status\" -eq {} ]", test.expected_exit)?;
+        match test.expected_exit {
+            Some(code) => writeln!(writer, "    [ \"$status\" -eq {} ]", code)?,
+            None => writeln!(writer, "    [ \"$status\" -ne 0 ]")?,
+        }
 
         // Write additional assertions
         if !test.assertions.is_empty() {

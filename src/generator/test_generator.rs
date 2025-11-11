@@ -179,16 +179,25 @@ impl TestGenerator {
     ///
     /// # Security Test Philosophy
     ///
-    /// - **Injection attacks**: Tool MUST reject with non-zero exit code
-    /// - **Null bytes**: Tool MUST reject with non-zero exit code
-    /// - **Path traversal**: Tool MUST reject with non-zero exit code
+    /// - **Injection attacks**: Tool MUST reject with non-zero exit code (1 or 2)
+    /// - **Null bytes**: Tool MUST reject with non-zero exit code (1 or 2)
+    /// - **Path traversal**: Tool MUST reject with non-zero exit code (1 or 2)
     /// - **Buffer overflow**: Tool MUST handle gracefully (may succeed if sanitized)
+    ///
+    /// # Unix Exit Code Convention
+    ///
+    /// - **0**: Success
+    /// - **1**: General error (runtime error, validation failure)
+    /// - **2**: Command-line usage error (invalid option, clap/argparse default)
+    ///
+    /// Modern CLI parsers (clap, commander, argparse) return exit code 2 for invalid options,
+    /// which is the correct Unix convention. Security tests accept both 1 and 2 as valid rejection.
     fn generate_security_tests(&self) -> Result<Vec<TestCase>> {
         let mut tests = Vec::new();
         let binary = &self.analysis.binary_name;
 
         // Test 1: Command injection via option
-        // MUST reject malicious input (exit code != 0)
+        // MUST reject malicious input (any non-zero exit code)
         tests.push(
             TestCase::new(
                 "security-001".to_string(),
@@ -196,13 +205,13 @@ impl TestGenerator {
                 TestCategory::Security,
                 format!("{} --name 'test; rm -rf /'", binary),
             )
-            .with_exit_code(1) // Expect rejection (non-zero exit code)
+            .expect_nonzero_exit() // Accept exit code 1, 2, or any non-zero
             .with_tag("injection".to_string())
             .with_tag("critical".to_string()),
         );
 
         // Test 2: Null byte injection
-        // MUST reject malicious input (exit code != 0)
+        // MUST reject malicious input (any non-zero exit code)
         tests.push(
             TestCase::new(
                 "security-002".to_string(),
@@ -210,13 +219,13 @@ impl TestGenerator {
                 TestCategory::Security,
                 format!(r#"{} --file $'/tmp/test\x00malicious'"#, binary),
             )
-            .with_exit_code(1) // Expect rejection (non-zero exit code)
+            .expect_nonzero_exit() // Accept exit code 1, 2, or any non-zero
             .with_tag("injection".to_string())
             .with_tag("critical".to_string()),
         );
 
         // Test 3: Path traversal
-        // MUST reject path traversal attempt (exit code != 0)
+        // MUST reject path traversal attempt (any non-zero exit code)
         tests.push(
             TestCase::new(
                 "security-003".to_string(),
@@ -224,7 +233,7 @@ impl TestGenerator {
                 TestCategory::Security,
                 format!("{} --file ../../../etc/passwd", binary),
             )
-            .with_exit_code(1) // Expect rejection (non-zero exit code)
+            .expect_nonzero_exit() // Accept exit code 1, 2, or any non-zero
             .with_tag("path-traversal".to_string())
             .with_tag("critical".to_string()),
         );
