@@ -1,10 +1,13 @@
-# CLI Testing Specialist Agent
+# CLI Testing Specialist
 
 **Languages**: [English](README.md) | [日本語](README.ja.md)
 
-**Last Updated**: 2025-11-10
-**Release Target**: v1.0.0 (2026-02-07)
-**Claude Code Exclusive**: Secure and comprehensive CLI tool testing framework
+**Version**: 1.0.2
+**Last Updated**: 2025-01-12
+**Status**: Production Ready
+**License**: MIT
+
+A comprehensive testing framework that automatically validates the quality and security of CLI tools. Built with Rust for maximum performance and reliability.
 
 ---
 
@@ -20,7 +23,6 @@
 - [Security Features](#security-features)
 - [Configuration](#configuration)
 - [File Structure](#file-structure)
-- [Sample Reports](#sample-reports)
 - [License](#license)
 - [Contributing](#contributing)
 - [Support](#support)
@@ -29,70 +31,72 @@
 
 ## Overview
 
-CLI Testing Specialist Agent is a comprehensive testing framework that automatically validates the quality and security of CLI tools.
+CLI Testing Specialist is a production-ready testing framework that automatically generates and executes comprehensive test suites for CLI tools.
 
 ### Key Features
 
-- 🔒 **Security Testing**: OWASP-compliant automated scanning
-- ✅ **Comprehensive Validation**: 11 categories, 140-160 test cases
-- 🎯 **Input Validation Testing** (Phase 2.5): Automatic validation of numeric/path/enum options
-- 🛡️ **Destructive Operation Testing** (Phase 2.5): Confirmation prompt and safety validation
-- 🐚 **Multi-Shell Support**: bash/zsh (future support planned: fish)
-- 📊 **Detailed Reports**: Markdown/JSON/HTML/JUnit XML
-- 🔄 **CI/CD Integration**: GitHub Actions & GitLab CI support
-- 🐳 **Docker Integration**: Test execution in isolated environments (optional)
-- ⚡ **Performance Boost** (Phase 2.5): 5-10x faster test generation
+- 🔒 **Security Testing**: OWASP-compliant automated security scanning
+- ✅ **Comprehensive Validation**: 9 test categories, 45-55 test cases (configurable)
+- 🎯 **Input Validation**: Automatic validation of numeric/path/enum options
+- 🛡️ **Destructive Operation Testing**: Confirmation prompt and safety validation
+- 🐚 **Multi-Shell Support**: bash/zsh compatibility testing
+- 📊 **Detailed Reports**: Markdown/JSON/HTML/JUnit XML formats
+- 🔄 **CI/CD Ready**: GitHub Actions & GitLab CI integration examples
+- ⚡ **High Performance**: Written in Rust for blazing-fast execution
+- 📦 **Single Binary**: Zero runtime dependencies
 
 ---
 
 ## Quick Start
 
 ```bash
-# 1. Analyze CLI tool
-bash core/cli-analyzer.sh /usr/local/bin/your-cli
+# 1. Install cli-testing-specialist
+cargo install --git https://github.com/sanae-abe/cli-testing-specialist
 
-# 2. Generate tests (all categories)
-bash core/test-generator.sh cli-analysis.json test-output all
+# 2. Analyze CLI tool
+cli-testing-specialist analyze /usr/bin/curl -o curl-analysis.json
 
-# 3. Run tests
-bats test-output/*.bats
+# 3. Generate tests (all categories)
+cli-testing-specialist generate curl-analysis.json -o curl-tests -c all
 
-# 4. Generate HTML report
-bash core/run-tests.sh test-output html ./reports
+# 4. Run tests and generate reports
+cli-testing-specialist run curl-tests -f all -o curl-reports
 
-# 5. Open in browser
-open reports/test-report.html  # macOS
-# xdg-open reports/test-report.html  # Linux
+# 5. View HTML report
+open curl-reports/curl-tests-report.html  # macOS
+# xdg-open curl-reports/curl-tests-report.html  # Linux
 ```
 
 ---
 
 ## Installation
 
-```bash
-# Automatic installation via Claude Code (recommended)
-# Agent will automatically execute setup
+### From Source (Recommended)
 
-# Or manual installation
-git clone <repository-url>
-cd cli-testing-specialist
-./bin/cli-test --version
+```bash
+# Install from GitHub
+cargo install --git https://github.com/sanae-abe/cli-testing-specialist
+
+# Verify installation
+cli-testing-specialist --version
+```
+
+### From Crates.io (Coming Soon)
+
+```bash
+cargo install cli-testing-specialist
 ```
 
 ### Dependencies
 
-CLI Testing Specialist Agent depends on the following tools:
-
-#### Required (Core Features)
-- **Bash 4.0+**: Test engine execution environment
-- **jq**: JSON processing (CLI metadata analysis, report generation)
-- **BATS**: Test execution framework
+#### Required for Test Execution
+- **BATS (Bash Automated Testing System)**: Test execution framework
   ```bash
   # macOS
   brew install bats-core
 
   # Ubuntu/Debian
-  apt-get install bats
+  sudo apt-get install bats
 
   # Manual installation
   git clone https://github.com/bats-core/bats-core.git
@@ -100,33 +104,8 @@ CLI Testing Specialist Agent depends on the following tools:
   sudo ./install.sh /usr/local
   ```
 
-#### Required for Phase 2.5+ (Input Validation Features)
-- **yq v4.x**: YAML processing (option type inference, constraint definitions)
-  ```bash
-  # macOS
-  brew install yq
-
-  # Ubuntu/Debian (snap)
-  snap install yq
-
-  # Linux (binary)
-  wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-  chmod +x yq_linux_amd64
-  sudo mv yq_linux_amd64 /usr/local/bin/yq
-
-  # Verify installation
-  yq --version  # Should show: yq (https://github.com/mikefarah/yq/) version 4.x
-  ```
-
-#### Optional (Extended Features)
-- **SQLite3**: Coverage tracking (Phase 2 feature)
-  ```bash
-  # macOS
-  brew install sqlite3
-
-  # Ubuntu/Debian
-  apt-get install sqlite3
-  ```
+#### CLI Testing Specialist Binary
+- **Zero runtime dependencies**: Single self-contained binary
 
 ---
 
@@ -154,158 +133,84 @@ cli-testing-specialist is optimized for **standard CLI tools**. See [docs/TARGET
 
 ---
 
-## Dependencies (continued)
-
-#### Optional (Extended Features - continued)
-- **Docker**: Test execution in isolated environments
-- **envsubst** (gettext): Template variable substitution (Bash fallback available)
-
-#### Dependency Check
-
-```bash
-# Verify required tools
-command -v bash && echo "✓ Bash"
-command -v jq && echo "✓ jq"
-command -v bats && echo "✓ BATS"
-command -v yq && echo "✓ yq (Phase 2.5+)"
-command -v sqlite3 && echo "✓ SQLite3 (Phase 2)"
-
-# yq version check (must be v4.x for Phase 2.5)
-yq --version 2>&1 | grep -q "version 4" && echo "✓ yq v4.x" || echo "⚠ yq v4.x required"
-```
-
----
-
 ## Features
 
-| Category | Description | Test Count |
+| Category | Description | Default |
 |---------|------|---------|
-| Basic Validation | Help, version, exit codes | 10 |
-| Subcommand Help | Comprehensive validation of all subcommands | Dynamic |
-| Security | Injection, secret leaks, TOCTOU | 25 |
-| Path Handling | Special characters, deep hierarchies, Unicode | 20 |
-| Multi-Shell | bash/zsh compatibility | 12 |
-| Input Validation (Basic) | Invalid values, edge cases | 12 |
-| **Input Validation (Extended)** 🆕 | **Numeric/path/enum option validation** | **25** |
-| **Destructive Operations** 🆕 | **Confirmation prompts, --yes/--force flags** | **16** |
-| **Directory Traversal Limits** 🆕 | **Large file count, deep nesting, symlink loops** | **12** |
-| Output Validation | Format, color output | 8 |
-| Environment Dependencies | OS, environment variables | 10 |
-| Performance | Startup time, memory usage | 6 |
-| Documentation Consistency | README vs help | 5 |
-| **Reports** | **4 formats (Markdown/JSON/HTML/JUnit)** | - |
+| **Basic Validation** | Help, version, exit codes | ✅ Enabled |
+| **Help** | Comprehensive subcommand help validation | ✅ Enabled |
+| **Security** | Command injection, null bytes, path traversal | ✅ Enabled |
+| **Path Handling** | Special characters, deep hierarchies, Unicode | ✅ Enabled |
+| **Multi-Shell** | bash/zsh compatibility | ✅ Enabled |
+| **Input Validation** | Numeric/path/enum option validation | ✅ Enabled |
+| **Destructive Operations** | Confirmation prompts, --yes/--force flags | ✅ Enabled |
+| **Performance** | Startup time, memory usage | ✅ Enabled |
+| **Directory Traversal** | Large file count, deep nesting, symlink loops | ⚠️ Opt-in* |
 
-**Total**: Approximately 152-172 test cases (41 in Phase 2.5, 12 in Phase 2.6)
+\* Directory Traversal tests are **opt-in** via `--include-intensive` flag to prevent CI environment issues (disk space, resource limits).
+
+### Test Generation Options
+
+```bash
+# Default: All categories except Directory Traversal
+cli-testing-specialist generate analysis.json -c all
+
+# Include resource-intensive tests
+cli-testing-specialist generate analysis.json -c all --include-intensive
+
+# Specific categories only
+cli-testing-specialist generate analysis.json -c basic,security,path
+```
 
 ---
 
 ## Report Formats
 
 ### 1. Markdown Format (`.md`)
-Human-readable format that can be directly displayed on GitHub/GitLab
+Human-readable format for GitHub/GitLab display
 
 ```bash
-bash core/run-tests.sh ./generated-tests markdown ./reports
+cli-testing-specialist run ./tests -f markdown -o ./reports
 ```
 
 ### 2. JSON Format (`.json`)
 Optimal for CI/CD integration and programmatic processing
 
 ```bash
-bash core/run-tests.sh ./generated-tests json ./reports
+cli-testing-specialist run ./tests -f json -o ./reports
 
-# Get success rate with jq
-jq -r '.summary.success_rate' reports/test-report.json
+# Parse with jq
+jq '[.suites[].tests[] | select(.status == "passed")] | length' reports/tests-report.json
 ```
 
-### 3. HTML Format (`.html`) - **New Feature**
-Interactive browser display, GitHub Pages publication support
+### 3. HTML Format (`.html`)
+Interactive browser display with search and filtering
 
 ```bash
-bash core/run-tests.sh ./generated-tests html ./reports
-open reports/test-report.html  # Open in browser
+cli-testing-specialist run ./tests -f html -o ./reports
+open reports/tests-report.html
 ```
 
 **HTML Features**:
-- Modern design with Bootstrap 5
+- Modern responsive design
 - Real-time search and filtering
-- Animated success rate graphs
-- Shell compatibility matrix display
-- Responsive design support
+- Test status visualization
+- One-click navigation
 
-### 4. All Formats at Once (`all`)
+### 4. JUnit XML Format (`.xml`)
+CI/CD integration (GitHub Actions, GitLab CI, Jenkins)
 
 ```bash
-bash core/run-tests.sh ./generated-tests all ./reports
+cli-testing-specialist run ./tests -f junit -o ./reports
+```
+
+### 5. All Formats at Once
+
+```bash
+cli-testing-specialist run ./tests -f all -o ./reports
 ```
 
 For details, see [`docs/REPORT-FORMATS.md`](docs/REPORT-FORMATS.md).
-
----
-
-## Test Execution
-
-### Sequential vs Parallel Execution
-
-**⚠️ IMPORTANT**: Directory Traversal Limits tests (`10-directory-traversal-limits.bats`) **must run sequentially**.
-
-```bash
-# ✅ CORRECT: Sequential execution (recommended for all tests)
-bats test-output/*.bats
-
-# ✅ CORRECT: Run directory-traversal tests separately
-bats test-output/10-directory-traversal-limits.bats
-
-# ❌ WRONG: Parallel execution conflicts with directory-traversal tests
-bats --jobs 4 test-output/*.bats  # Will cause resource conflicts
-```
-
-### Why Sequential Execution?
-
-Directory Traversal Limits tests are **resource-intensive** and create:
-- Large test directories (100, 500, 1000 files)
-- Deep directory structures (50 levels)
-- Symlink loops
-- Resource limits (2GB memory, 2048 files, 100 processes)
-
-Running these tests in parallel can cause:
-- `/tmp` space exhaustion
-- Resource limit conflicts
-- Unreliable test results
-- System performance degradation
-
-### Test Category Execution
-
-```bash
-# Generate specific test categories
-bash core/test-generator.sh cli-analysis.json test-output basic,security,path
-
-# Available categories:
-# - basic               (basic validation)
-# - help                (subcommand help)
-# - security            (security scanning)
-# - path                (path handling)
-# - multi-shell         (shell compatibility)
-# - performance         (performance tests)
-# - concurrency         (concurrent execution)
-# - input-validation    (input validation - Phase 2.5)
-# - destructive-ops     (destructive operations - Phase 2.5)
-# - directory-traversal (directory traversal limits - Phase 2.6)
-# - all                 (all categories)
-```
-
-### Skipping Resource-Intensive Tests
-
-In CI environments with limited `/tmp` space:
-
-```bash
-# Skip directory-traversal tests
-export SKIP_DIRECTORY_TRAVERSAL_TESTS=1
-bats test-output/*.bats
-
-# Check /tmp capacity before running
-df -h /tmp  # Ensure at least 100MB free space
-```
 
 ---
 
@@ -313,247 +218,137 @@ df -h /tmp  # Ensure at least 100MB free space
 
 ### GitHub Actions
 
-Automatic testing and report publishing with `.github/workflows/cli-test.yml`
+```yaml
+name: CLI Testing
 
-**Features**:
-- Ubuntu/macOS × Bash/Zsh matrix testing
-- Automatic HTML report deployment to GitHub Pages
-- Test results saved as Artifacts
-- Automatic ShellCheck linting
+on: [push, pull_request]
 
-**Usage**:
-1. Enable GitHub Pages in repository settings
-2. Auto-execution on push to main branch
-3. View reports at `https://[username].github.io/[repo]/`
+jobs:
+  cli-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-### GitLab CI/CD
+      - name: Install cli-testing-specialist
+        run: |
+          cargo install --git https://github.com/sanae-abe/cli-testing-specialist
 
-Multi-shell environment testing and GitLab Pages publishing with `.gitlab-ci.yml`
+      - name: Build your CLI
+        run: cargo build --release
 
-**Features**:
-- Bash/Zsh/Dash compatibility testing
-- Report aggregation stage
-- Automatic deployment to GitLab Pages
-- Regression testing via scheduled execution
+      - name: Analyze CLI
+        run: |
+          cli-testing-specialist analyze \
+            ./target/release/your-cli \
+            -o analysis.json
 
-**Pipeline Stages**:
-1. `validate` - Structure validation & ShellCheck
-2. `test` - Test execution in multiple shell environments
-3. `report` - Report aggregation
-4. `deploy` - GitLab Pages deployment
+      - name: Generate tests
+        run: |
+          cli-testing-specialist generate \
+            analysis.json \
+            -o tests \
+            -c all
+
+      - name: Install BATS
+        run: sudo apt-get install -y bats
+
+      - name: Run tests
+        run: |
+          cli-testing-specialist run \
+            tests \
+            -f all \
+            -o reports
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: reports/
+```
+
+### GitLab CI
+
+```yaml
+cli-test:
+  image: rust:latest
+  script:
+    - cargo install --git https://github.com/sanae-abe/cli-testing-specialist
+    - cargo build --release
+    - cli-testing-specialist analyze ./target/release/your-cli -o analysis.json
+    - cli-testing-specialist generate analysis.json -o tests -c all
+    - apt-get update && apt-get install -y bats
+    - cli-testing-specialist run tests -f all -o reports
+  artifacts:
+    paths:
+      - reports/
+```
 
 ---
 
 ## Security Features
 
+### Security Test Philosophy
+
+**IMPORTANT**: Security tests expect tools to **reject** malicious inputs with non-zero exit codes.
+
+```rust
+// Command injection test
+cli-test --name 'test; rm -rf /'
+// Expected: exit code 1 (rejection) ✅
+// NOT exit code 0 (success) ❌
+```
+
+### Security Test Categories
+
+1. **Injection Attacks**: Command injection, null byte injection
+   - Expected behavior: Tool **rejects** with exit code 1
+   - Tags: `injection`, `critical`
+
+2. **Path Traversal**: Directory traversal attempts
+   - Expected behavior: Tool **rejects** with exit code 1
+   - Tags: `path-traversal`, `critical`
+
+3. **Buffer Overflow**: Extremely long inputs
+   - Expected behavior: Graceful handling (informational)
+   - Tags: `buffer-overflow`, `informational`
+
 ### Input Validation
+
 - CLI binary path verification
-- Path traversal attack defense
-- Command injection protection
-
-### Secure Execution Environment
-- Temporary file umask 077
-- TOCTOU attack protection (using mktemp)
-- Docker non-root user execution
-
-### Security Scanning
-- OWASP Top 10 compliance
-- Secret leak detection
-- Dependency vulnerability scanning
+- Path canonicalization (prevent path traversal)
+- Timeout enforcement (prevent hang)
+- Safe command execution
 
 ---
 
 ## Configuration
 
-### Default Configuration File
-
-```yaml
-# ~/.config/cli-test/config.yaml
-cli-testing-specialist:
-  version: "1.1.0"
-
-  test_categories:
-    enabled:
-      - basic-validation
-      - help-checker
-      - security-scanner
-      - path-handler
-      - shell-compatibility
-
-  docker:
-    enabled: true
-    fallback_to_native: true
-
-  logging:
-    level: "INFO"
-    file: "/tmp/cli-test.log"
-```
-
-For details, refer to `config/schema.yaml`.
-
----
-
-## Troubleshooting
-
-### /tmp Space Exhausted
-
-Directory traversal tests create many temporary files. If tests fail with "No space left on device":
+### Command-Line Options
 
 ```bash
-# Check /tmp space
-df -h /tmp
+# Analyze with custom output
+cli-testing-specialist analyze /usr/bin/curl -o custom-analysis.json
 
-# Clean up test directories manually
-rm -rf /tmp/cli-test-*
+# Generate specific categories
+cli-testing-specialist generate analysis.json -c basic,security,path
 
-# Free up space (macOS)
-sudo periodic daily weekly monthly
+# Include intensive tests
+cli-testing-specialist generate analysis.json -c all --include-intensive
 
-# Free up space (Linux)
-sudo apt-get clean  # or yum clean all
+# Run with timeout
+cli-testing-specialist run tests --timeout 120 -f all -o reports
+
+# Skip specific categories
+cli-testing-specialist run tests --skip destructive-ops,directory-traversal
 ```
 
-**Prevention**: Ensure at least 100MB free in `/tmp` before running directory-traversal tests.
-
-### Test Cleanup Failures
-
-If tests are interrupted (Ctrl+C, system crash), temporary directories may remain:
+### Environment Variables
 
 ```bash
-# List orphaned test directories
-ls -la /tmp/cli-test-*
-
-# Safe cleanup (removes only test directories)
-find /tmp -maxdepth 1 -type d -name "cli-test-*" -mtime +1 -exec rm -rf {} \;
-
-# Force cleanup (use with caution)
-rm -rf /tmp/cli-test-*
+# Skip directory traversal tests
+export SKIP_DIRECTORY_TRAVERSAL_TESTS=1
+cli-testing-specialist run tests -f all -o reports
 ```
-
-**Note**: Test cleanup is automatic via `trap` handlers, but interruptions may leave files.
-
-### Bash Version Issues
-
-Directory traversal and i18n features require **Bash 4.0+** (for associative arrays):
-
-```bash
-# Check Bash version
-bash --version
-
-# macOS (default Bash 3.2)
-brew install bash
-which bash  # /usr/local/bin/bash or /opt/homebrew/bin/bash
-
-# Use Homebrew Bash explicitly
-/usr/local/bin/bash core/cli-analyzer.sh /usr/bin/curl
-
-# Update default shell (optional)
-sudo bash -c 'echo /usr/local/bin/bash >> /etc/shells'
-chsh -s /usr/local/bin/bash
-```
-
-**GitHub Actions**: CI automatically uses Homebrew Bash on macOS runners.
-
-### Memory/Resource Limit Errors
-
-If tests fail with "Cannot allocate memory" or "Too many open files":
-
-```bash
-# Check current limits
-ulimit -a
-
-# Increase file descriptor limit (temporary)
-ulimit -n 4096
-
-# Increase virtual memory (Linux)
-sudo sysctl -w vm.max_map_count=262144
-
-# macOS: Increase limits in /etc/launchd.conf
-echo "limit maxfiles 4096 unlimited" | sudo tee -a /etc/launchd.conf
-```
-
-**Note**: Directory traversal tests set resource limits automatically (`ulimit -m 2097152`).
-
-### BATS Syntax Errors
-
-If you see syntax errors when checking BATS files with `bash -n`:
-
-```bash
-# ❌ WRONG: bash -n doesn't understand BATS syntax
-bash -n test-output/10-directory-traversal-limits.bats
-# Error: unexpected token `}' near `@test'
-
-# ✅ CORRECT: Use BATS to run tests
-bats test-output/10-directory-traversal-limits.bats
-```
-
-**Explanation**: BATS uses `@test` syntax that requires BATS preprocessing. Standard `bash -n` cannot parse BATS files.
-
-### i18n Message Not Found
-
-If you see "Message key not found" errors:
-
-```bash
-# Check language setting
-echo $LANG
-echo $CLI_TEST_LANG
-
-# Verify i18n files exist
-ls -la i18n/ja.sh i18n/en.sh
-
-# Force specific language
-CLI_TEST_LANG=en bash core/cli-analyzer.sh /usr/bin/curl
-
-# Debug i18n loading
-CLI_TEST_LOG_LEVEL=DEBUG bash core/cli-analyzer.sh /usr/bin/curl
-```
-
----
-
-## Sample Reports
-
-You can generate and review sample tests and reports:
-
-```bash
-# Run sample tests and generate all format reports
-bash core/run-tests.sh sample-tests all sample-reports
-
-# Generated files
-sample-reports/
-├── test-report.html  # HTML report (22KB)
-├── test-report.json  # JSON report (255B)
-└── test-report.md    # Markdown report (968B)
-
-# Open HTML report in browser
-open sample-reports/test-report.html
-```
-
-**Sample Report**: [`sample-reports/test-report.html`](sample-reports/test-report.html)
-
----
-
-## License
-
-MIT License
-
----
-
-## Contributing
-
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
-
----
-
-## Support
-
-- **Documentation**: `docs/` directory
-  - [`REPORT-FORMATS.md`](docs/REPORT-FORMATS.md) - Detailed report format guide
-  - [`INPUT-VALIDATION-GUIDE.md`](docs/INPUT-VALIDATION-GUIDE.md) - Input validation guide
-  - [`INPUT-VALIDATION-PLAN-v2.md`](docs/INPUT-VALIDATION-PLAN-v2.md) - Phase 2.5 implementation plan
-  - [`DIRECTORY-TRAVERSAL-LIMITS-DESIGN.md`](docs/DIRECTORY-TRAVERSAL-LIMITS-DESIGN.md) - Phase 2.6 design document 🆕
-  - [`PHASE2-PLAN.md`](docs/PHASE2-PLAN.md) - Phase 2 implementation plan
-  - [`PHASE25-FINAL-REPORT.md`](docs/PHASE25-FINAL-REPORT.md) - Phase 2.5 final report
-- **Issues**: GitHub Issues
 
 ---
 
@@ -561,33 +356,81 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 
 ```
 cli-testing-specialist/
-├── core/
-│   ├── cli-analyzer.sh            # CLI analysis engine
-│   ├── test-generator.sh          # BATS generation engine (Phase 2.5 extended)
-│   ├── option-analyzer.sh         # Option type inference engine (Phase 2.5 new)
-│   ├── coverage-tracker.sh        # Coverage tracking (Phase 2)
-│   ├── run-tests.sh               # Test execution & report generation
-│   ├── report-generator-html.sh   # HTML report generation
-│   ├── shell-detector.sh          # Shell detection engine
-│   └── validator.sh               # Input validation engine
-├── config/                        # Phase 2.5 new
-│   ├── option-patterns.yaml       # Option type pattern definitions
-│   ├── numeric-constraints.yaml   # Numeric constraint definitions
-│   └── enum-definitions.yaml      # Enum definitions
-├── templates/                     # Phase 2.5 new
-│   ├── bats-test.template         # BATS template
-│   ├── input-validation.fragment  # Input validation test fragment
-│   └── destructive-ops.fragment   # Destructive operation test fragment
-├── docs/
-│   ├── REPORT-FORMATS.md          # Report format guide
-│   ├── INPUT-VALIDATION-GUIDE.md  # Input validation guide (Phase 2.5 new)
-│   ├── PHASE2-PLAN.md             # Phase 2 implementation plan
-│   └── INPUT-VALIDATION-PLAN-v2.md # Phase 2.5 implementation plan
-├── .github/workflows/cli-test.yml # GitHub Actions configuration
-├── .gitlab-ci.yml                 # GitLab CI configuration
-├── sample-tests/demo.bats         # Sample tests
-├── sample-reports/                # Sample report output
-└── README.md                      # This file
+├── Cargo.toml              # Rust project configuration
+├── Cargo.lock
+├── README.md               # This file
+├── LICENSE                 # MIT License
+├── src/
+│   ├── main.rs             # Entry point
+│   ├── lib.rs              # Library exports
+│   ├── cli/                # CLI interface (clap)
+│   ├── analyzer/           # CLI analysis engine
+│   ├── generator/          # Test case generation
+│   ├── runner/             # BATS test execution
+│   ├── reporter/           # Report generation (MD/JSON/HTML/JUnit)
+│   ├── types/              # Type definitions
+│   ├── error.rs            # Error types
+│   └── utils/              # Utilities
+├── tests/                  # Integration tests
+├── benches/                # Performance benchmarks
+└── docs/
+    ├── RUST_V1_DESIGN.md   # Design document
+    ├── TARGET-TOOLS.md     # Target tool guidelines
+    └── REPORT-FORMATS.md   # Report format guide
 ```
 
 ---
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+---
+
+## Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes with tests
+4. Submit a pull request
+
+For major changes, please open an issue first to discuss the proposed changes.
+
+---
+
+## Support
+
+- **Documentation**: [`docs/`](docs/) directory
+  - [Design Document](docs/RUST_V1_DESIGN.md) - Architecture and implementation
+  - [Target Tools Guide](docs/TARGET-TOOLS.md) - Compatibility guidelines
+  - [Report Formats](docs/REPORT-FORMATS.md) - Report format reference
+- **Issues**: [GitHub Issues](https://github.com/sanae-abe/cli-testing-specialist/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/sanae-abe/cli-testing-specialist/discussions)
+
+---
+
+## Changelog
+
+### v1.0.2 (2025-01-12)
+
+**Security Fix** 🔒:
+- Fixed critical security test design flaw where tests expected malicious inputs to succeed (exit code 0)
+- Security tests now correctly expect tools to **reject** attacks (exit code 1)
+- Affects: command injection, null byte injection, path traversal tests
+
+**Features**:
+- Directory Traversal tests now **opt-in** via `--include-intensive` flag
+- Improved `.gitignore` to exclude analysis results and test outputs
+
+### v1.0.1 (2025-01-11)
+
+- Initial production release
+- 9 test categories with 45-55 test cases
+- 4 report formats (Markdown/JSON/HTML/JUnit)
+- Multi-project CI integration examples
+
+---
+
+**Built with ❤️ using Rust**
