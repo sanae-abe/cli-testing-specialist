@@ -98,7 +98,9 @@ fn main() -> Result<()> {
             log::info!("Selected {} test categories", num_categories);
 
             if !include_intensive {
-                log::info!("Excluding resource-intensive tests (use --include-intensive to enable)");
+                log::info!(
+                    "Excluding resource-intensive tests (use --include-intensive to enable)"
+                );
             }
 
             // 3. Generate test cases

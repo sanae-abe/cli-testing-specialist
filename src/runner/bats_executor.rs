@@ -135,28 +135,36 @@ impl BatsExecutor {
             let original_count = bats_files.len();
             bats_files.retain(|path| {
                 if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    !skip_cats.iter().any(|skip_cat| file_stem.contains(skip_cat))
+                    !skip_cats
+                        .iter()
+                        .any(|skip_cat| file_stem.contains(skip_cat))
                 } else {
                     true
                 }
             });
             let skipped_count = original_count - bats_files.len();
             if skipped_count > 0 {
-                info!("Skipped {} test suite(s) based on skip categories", skipped_count);
+                info!(
+                    "Skipped {} test suite(s) based on skip categories",
+                    skipped_count
+                );
             }
         }
 
         info!("Executing {} test suites", bats_files.len());
 
         // Create single tokio runtime for all test executions
-        let runtime = tokio::runtime::Runtime::new()
-            .map_err(|e| Error::BatsExecutionFailed(format!("Failed to create async runtime: {}", e)))?;
+        let runtime = tokio::runtime::Runtime::new().map_err(|e| {
+            Error::BatsExecutionFailed(format!("Failed to create async runtime: {}", e))
+        })?;
 
         // Create progress bar
         let pb = ProgressBar::new(bats_files.len() as u64);
         pb.set_style(
             ProgressStyle::default_bar()
-                .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}")
+                .template(
+                    "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}",
+                )
                 .unwrap()
                 .progress_chars("#>-"),
         );
@@ -170,7 +178,10 @@ impl BatsExecutor {
                 .unwrap_or("unknown");
 
             let suite_start_time = Instant::now();
-            pb.set_message(format!("Running {} (timeout: {}s)", suite_name, self.timeout));
+            pb.set_message(format!(
+                "Running {} (timeout: {}s)",
+                suite_name, self.timeout
+            ));
 
             match self.execute_suite(bats_file, &runtime) {
                 Ok(suite) => {
@@ -180,16 +191,34 @@ impl BatsExecutor {
 
                     info!(
                         "Suite '{}': {}/{} tests passed in {:.1}s",
-                        suite.name, passed, total, elapsed.as_secs_f64()
+                        suite.name,
+                        passed,
+                        total,
+                        elapsed.as_secs_f64()
                     );
 
-                    pb.set_message(format!("{} ✓ ({}/{}) {:.1}s", suite_name, passed, total, elapsed.as_secs_f64()));
+                    pb.set_message(format!(
+                        "{} ✓ ({}/{}) {:.1}s",
+                        suite_name,
+                        passed,
+                        total,
+                        elapsed.as_secs_f64()
+                    ));
                     suites.push(suite);
                 }
                 Err(e) => {
                     let elapsed = suite_start_time.elapsed();
-                    warn!("Failed to execute suite '{}' after {:.1}s: {}", suite_name, elapsed.as_secs_f64(), e);
-                    pb.set_message(format!("{} ✗ (timeout after {:.0}s)", suite_name, elapsed.as_secs_f64()));
+                    warn!(
+                        "Failed to execute suite '{}' after {:.1}s: {}",
+                        suite_name,
+                        elapsed.as_secs_f64(),
+                        e
+                    );
+                    pb.set_message(format!(
+                        "{} ✗ (timeout after {:.0}s)",
+                        suite_name,
+                        elapsed.as_secs_f64()
+                    ));
 
                     // Print user-friendly error message
                     eprintln!("\n⚠️  Warning: {}", e);
@@ -222,7 +251,11 @@ impl BatsExecutor {
     }
 
     /// Execute a single BATS suite with timeout
-    fn execute_suite(&self, bats_file: &Path, runtime: &tokio::runtime::Runtime) -> Result<TestSuite> {
+    fn execute_suite(
+        &self,
+        bats_file: &Path,
+        runtime: &tokio::runtime::Runtime,
+    ) -> Result<TestSuite> {
         let suite_start = Instant::now();
         let started_at = Utc::now();
 
@@ -238,7 +271,8 @@ impl BatsExecutor {
         let bats_file_path = bats_file.to_path_buf();
         let suite_name_clone = suite_name.to_string();
 
-        let output = runtime.block_on(async move {
+        let output = runtime
+            .block_on(async move {
                 // Wrap execution in timeout
                 tokio::time::timeout(timeout_duration, async move {
                     let mut execution = tokio::task::spawn_blocking(move || {
@@ -275,7 +309,8 @@ impl BatsExecutor {
                             }
                         }
                     }
-                }).await
+                })
+                .await
             })
             .map_err(|_| {
                 // Timeout error from tokio::time::timeout
