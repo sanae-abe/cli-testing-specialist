@@ -13,6 +13,7 @@
 - [Overview](#overview)
 - [Quick Start](#quick-start)
 - [Installation](#installation)
+- [Target Tools](#target-tools)
 - [Features](#features)
 - [Report Formats](#report-formats)
 - [CI/CD Integration](#cicd-integration)
@@ -126,6 +127,36 @@ CLI Testing Specialist Agent depends on the following tools:
   # Ubuntu/Debian
   apt-get install sqlite3
   ```
+
+---
+
+## Target Tools
+
+cli-testing-specialist is optimized for **standard CLI tools**. See [docs/TARGET-TOOLS.md](./docs/TARGET-TOOLS.md) for detailed guidance.
+
+### ✅ High Compatibility (70-90% success rate)
+- Standard CLI tools (curl, git, ls, cat)
+- Tools with standard options (--help, --version)
+- Non-interactive tools
+- **Example**: package-publisher (Node.js CLI)
+
+### ⚠️ Medium Compatibility (30-60% success rate)
+- Configuration-driven tools (cmdrun with commands.toml)
+- Custom UI implementations (cldev with dialoguer, i18n)
+- **Recommendation**: Use "informational mode" in CI
+
+### ❌ Low Compatibility (not recommended)
+- Interactive shells (mysql, psql, redis-cli)
+- Container management (docker, podman)
+- Domain-specific tools with custom protocols
+
+**See [docs/TARGET-TOOLS.md](./docs/TARGET-TOOLS.md) for complete guidelines and best practices.**
+
+---
+
+## Dependencies (continued)
+
+#### Optional (Extended Features - continued)
 - **Docker**: Test execution in isolated environments
 - **envsubst** (gettext): Template variable substitution (Bash fallback available)
 
