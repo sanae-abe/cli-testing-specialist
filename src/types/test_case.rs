@@ -152,13 +152,13 @@ impl TestCategory {
         ]
     }
 
-    /// Get default categories (excludes resource-intensive tests)
+    /// Get standard test categories (excludes resource-intensive tests)
     ///
     /// Excludes:
     /// - DirectoryTraversal: Requires significant /tmp space (100MB+) and creates many files
     ///
     /// Use `--include-intensive` flag to include these categories
-    pub fn default() -> Vec<TestCategory> {
+    pub fn standard_categories() -> Vec<TestCategory> {
         vec![
             Self::Basic,
             Self::Help,

@@ -304,7 +304,7 @@ fn parse_categories(categories_str: &str, include_intensive: bool) -> Result<Vec
         return if include_intensive {
             Ok(TestCategory::all())
         } else {
-            Ok(TestCategory::default())
+            Ok(TestCategory::standard_categories())
         };
     }
 
