@@ -11,9 +11,17 @@ use std::path::Path;
 lazy_static! {
     /// Regex pattern for subcommand lines in help output
     /// Matches lines like:
-    /// - "  help      Show help information"
-    /// - "  config    Manage configuration"
-    static ref SUBCOMMAND_PATTERN: Regex = Regex::new(r"^\s{2,}([a-z][a-z0-9-]+)\s{2,}(.+)$").unwrap();
+    /// - "  help      Show help information" (standard format)
+    /// - "  config    Manage configuration" (standard format)
+    /// - "  publish [options] [project-path]  Publish package to registry" (Commander.js format)
+    ///
+    /// Pattern breakdown:
+    /// - `^\s{2,}` - Line starts with 2+ spaces (indentation)
+    /// - `([a-z][a-z0-9-]+)` - Subcommand name (lowercase, alphanumeric, hyphens)
+    /// - `(?:\s+\[[^\]]+\])*` - Optional argument specifications like [options], [path] (Commander.js)
+    /// - `\s{2,}` - 2+ spaces separating command from description
+    /// - `(.+)$` - Description text
+    static ref SUBCOMMAND_PATTERN: Regex = Regex::new(r"^\s{2,}([a-z][a-z0-9-]+)(?:\s+\[[^\]]+\])*\s{2,}(.+)$").unwrap();
 
     /// Common section headers that indicate subcommands section
     static ref SUBCOMMAND_HEADERS: Vec<&'static str> = vec![

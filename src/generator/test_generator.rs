@@ -83,7 +83,6 @@ impl TestGenerator {
     /// Generate basic validation tests (help, version, exit codes)
     fn generate_basic_tests(&self) -> Result<Vec<TestCase>> {
         let mut tests = Vec::new();
-        let binary = &self.analysis.binary_name;
 
         // Test 1: Help flag
         tests.push(
@@ -91,7 +90,7 @@ impl TestGenerator {
                 "basic-001".to_string(),
                 "Display help with --help flag".to_string(),
                 TestCategory::Basic,
-                format!("{} --help", binary),
+                "\"$CLI_BINARY\" --help".to_string(),
             )
             .with_exit_code(0)
             .with_assertion(Assertion::OutputContains("Usage:".to_string()))
@@ -104,7 +103,7 @@ impl TestGenerator {
                 "basic-002".to_string(),
                 "Display help with -h flag".to_string(),
                 TestCategory::Basic,
-                format!("{} -h", binary),
+                "\"$CLI_BINARY\" -h".to_string(),
             )
             .with_exit_code(0)
             .with_assertion(Assertion::OutputContains("Usage:".to_string()))
@@ -118,7 +117,7 @@ impl TestGenerator {
                     "basic-003".to_string(),
                     "Display version with --version flag".to_string(),
                     TestCategory::Basic,
-                    format!("{} --version", binary),
+                    "\"$CLI_BINARY\" --version".to_string(),
                 )
                 .with_exit_code(0)
                 .with_tag("version".to_string()),
@@ -132,7 +131,7 @@ impl TestGenerator {
                 "basic-004".to_string(),
                 "Reject invalid option".to_string(),
                 TestCategory::Basic,
-                format!("{} --invalid-option-xyz", binary),
+                "\"$CLI_BINARY\" --invalid-option-xyz".to_string(),
             )
             .with_exit_code(2) // clap standard: 2 for usage errors
             .with_assertion(Assertion::OutputContains("error".to_string()))
@@ -150,7 +149,7 @@ impl TestGenerator {
                         "basic-005".to_string(),
                         "Show help when invoked without arguments".to_string(),
                         TestCategory::Basic,
-                        binary.to_string(),
+                        "\"$CLI_BINARY\"".to_string(),
                     )
                     .with_exit_code(0)
                     // Output check removed: Some CLIs output nothing
@@ -167,7 +166,7 @@ impl TestGenerator {
                         "basic-005".to_string(),
                         "Require subcommand when invoked without arguments".to_string(),
                         TestCategory::Basic,
-                        binary.to_string(),
+                        "\"$CLI_BINARY\"".to_string(),
                     )
                     .expect_nonzero_exit() // Accept exit 1 or 2
                     // Output check removed: CLIs show different error formats
@@ -184,7 +183,7 @@ impl TestGenerator {
                         "basic-005".to_string(),
                         "Enter interactive mode when invoked without arguments".to_string(),
                         TestCategory::Basic,
-                        format!("echo '' | {}", binary), // Pipe empty input to exit immediately
+                        "echo '' | \"$CLI_BINARY\"".to_string(), // Pipe empty input to exit immediately
                     )
                     .with_exit_code(0)
                     .with_priority(TestPriority::Important)
@@ -200,7 +199,6 @@ impl TestGenerator {
     /// Generate help display tests
     fn generate_help_tests(&self) -> Result<Vec<TestCase>> {
         let mut tests = Vec::new();
-        let binary = &self.analysis.binary_name;
 
         // Test help for each subcommand
         for (idx, subcommand) in self.analysis.subcommands.iter().enumerate() {
@@ -209,7 +207,7 @@ impl TestGenerator {
                     format!("help-{:03}", idx + 1),
                     format!("Display help for subcommand '{}'", subcommand.name),
                     TestCategory::Help,
-                    format!("{} {} --help", binary, subcommand.name),
+                    format!("\"$CLI_BINARY\" {} --help", subcommand.name),
                 )
                 .with_exit_code(0)
                 .with_assertion(Assertion::OutputContains("Usage:".to_string()))
@@ -243,7 +241,6 @@ impl TestGenerator {
     /// which is the correct Unix convention. Security tests accept both 1 and 2 as valid rejection.
     fn generate_security_tests(&self) -> Result<Vec<TestCase>> {
         let mut tests = Vec::new();
-        let binary = &self.analysis.binary_name;
 
         // Find a string option for testing (prefer --config, --file, or first string option)
         let string_option = self
@@ -265,7 +262,7 @@ impl TestGenerator {
                 "security-001".to_string(),
                 "Reject command injection in option value".to_string(),
                 TestCategory::Security,
-                format!("{} {} 'test; rm -rf /'", binary, string_option),
+                format!("\"$CLI_BINARY\" {} 'test; rm -rf /'", string_option),
             )
             .expect_nonzero_exit() // Accept exit code 1, 2, or any non-zero
             .with_priority(TestPriority::SecurityCheck)
@@ -280,7 +277,7 @@ impl TestGenerator {
                 "security-002".to_string(),
                 "Reject null byte in option value".to_string(),
                 TestCategory::Security,
-                format!(r#"{} {} $'/tmp/test\x00malicious'"#, binary, string_option),
+                format!(r#""$CLI_BINARY" {} $'/tmp/test\x00malicious'"#, string_option),
             )
             .expect_nonzero_exit() // Accept exit code 1, 2, or any non-zero
             .with_priority(TestPriority::SecurityCheck)
@@ -295,7 +292,7 @@ impl TestGenerator {
                 "security-003".to_string(),
                 "Reject path traversal attempt".to_string(),
                 TestCategory::Security,
-                format!("{} {} ../../../etc/passwd", binary, string_option),
+                format!("\"$CLI_BINARY\" {} ../../../etc/passwd", string_option),
             )
             .expect_nonzero_exit() // Accept exit code 1, 2, or any non-zero
             .with_priority(TestPriority::SecurityCheck)
@@ -311,7 +308,7 @@ impl TestGenerator {
                 "security-004".to_string(),
                 "Handle extremely long input".to_string(),
                 TestCategory::Security,
-                format!("{} {} '{}'", binary, string_option, long_input),
+                format!("\"$CLI_BINARY\" {} '{}'", string_option, long_input),
             )
             // No exit code expectation - this is informational
             // Tool may succeed (0) if properly sanitized, or fail (1) if rejected
@@ -326,7 +323,6 @@ impl TestGenerator {
     /// Generate path handling tests
     fn generate_path_tests(&self) -> Result<Vec<TestCase>> {
         let mut tests = Vec::new();
-        let binary = &self.analysis.binary_name;
 
         // Find path options
         let path_options: Vec<&CliOption> = self
@@ -350,7 +346,7 @@ impl TestGenerator {
                     format!("path-{:03}-spaces", idx + 1),
                     format!("Handle path with spaces for {}", flag),
                     TestCategory::Path,
-                    format!("{} {} '/tmp/test dir/file.txt'", binary, flag),
+                    format!("\"$CLI_BINARY\" {} '/tmp/test dir/file.txt'", flag),
                 )
                 .with_tag("spaces".to_string()),
             );
@@ -361,7 +357,7 @@ impl TestGenerator {
                     format!("path-{:03}-unicode", idx + 1),
                     format!("Handle Unicode in path for {}", flag),
                     TestCategory::Path,
-                    format!("{} {} '/tmp/テスト/file.txt'", binary, flag),
+                    format!("\"$CLI_BINARY\" {} '/tmp/テスト/file.txt'", flag),
                 )
                 .with_tag("unicode".to_string()),
             );
@@ -372,7 +368,7 @@ impl TestGenerator {
                     format!("path-{:03}-symlink", idx + 1),
                     format!("Handle symbolic links for {}", flag),
                     TestCategory::Path,
-                    format!("{} {} '/tmp/test-symlink'", binary, flag),
+                    format!("\"$CLI_BINARY\" {} '/tmp/test-symlink'", flag),
                 )
                 .with_tag("symlink".to_string()),
             );
@@ -384,7 +380,6 @@ impl TestGenerator {
     /// Generate input validation tests
     fn generate_input_validation_tests(&self) -> Result<Vec<TestCase>> {
         let mut tests = Vec::new();
-        let binary = &self.analysis.binary_name;
 
         // Find numeric options
         let numeric_options: Vec<&CliOption> = self
@@ -403,7 +398,7 @@ impl TestGenerator {
                     format!("input-{:03}-valid", idx + 1),
                     format!("Accept valid numeric value for {}", flag),
                     TestCategory::InputValidation,
-                    format!("{} {} 10", binary, flag),
+                    format!("\"$CLI_BINARY\" {} 10", flag),
                 )
                 .with_tag("numeric".to_string()),
             );
@@ -414,7 +409,7 @@ impl TestGenerator {
                     format!("input-{:03}-invalid", idx + 1),
                     format!("Reject non-numeric value for {}", flag),
                     TestCategory::InputValidation,
-                    format!("{} {} 'not-a-number'", binary, flag),
+                    format!("\"$CLI_BINARY\" {} 'not-a-number'", flag),
                 )
                 .with_exit_code(1)
                 .with_tag("numeric".to_string())
@@ -432,7 +427,7 @@ impl TestGenerator {
                             format!("input-{:03}-negative", idx + 1),
                             format!("Reject negative value for {}", flag),
                             TestCategory::InputValidation,
-                            format!("{} {} -1", binary, flag),
+                            format!("\"$CLI_BINARY\" {} -1", flag),
                         )
                         .with_exit_code(1)
                         .with_tag("numeric".to_string())
@@ -461,7 +456,7 @@ impl TestGenerator {
                             format!("enum-{:03}-valid", idx + 1),
                             format!("Accept valid enum value for {}", flag),
                             TestCategory::InputValidation,
-                            format!("{} {} {}", binary, flag, first_value),
+                            format!("\"$CLI_BINARY\" {} {}", flag, first_value),
                         )
                         .with_tag("enum".to_string()),
                     );
@@ -473,7 +468,7 @@ impl TestGenerator {
                         format!("enum-{:03}-invalid", idx + 1),
                         format!("Reject invalid enum value for {}", flag),
                         TestCategory::InputValidation,
-                        format!("{} {} 'invalid-value-xyz'", binary, flag),
+                        format!("\"$CLI_BINARY\" {} 'invalid-value-xyz'", flag),
                     )
                     .with_exit_code(1)
                     .with_tag("enum".to_string())
@@ -488,7 +483,6 @@ impl TestGenerator {
     /// Generate destructive operations tests
     fn generate_destructive_ops_tests(&self) -> Result<Vec<TestCase>> {
         let mut tests = Vec::new();
-        let binary = &self.analysis.binary_name;
 
         // Look for destructive subcommands (delete, remove, clean, destroy, etc.)
         let destructive_keywords = ["delete", "remove", "clean", "destroy", "purge", "drop"];
@@ -527,7 +521,7 @@ impl TestGenerator {
                         format!("destructive-{}-001", subcommand.name),
                         format!("Subcommand '{}' requires confirmation", subcommand.name),
                         TestCategory::DestructiveOps,
-                        format!("echo 'n' | {} {}{}", binary, subcommand.name, args_part),
+                        format!("echo 'n' | \"$CLI_BINARY\" {}{}", subcommand.name, args_part),
                     )
                     .with_assertion(Assertion::OutputContains("confirm".to_string()))
                     .with_tag("confirmation".to_string())
@@ -547,7 +541,7 @@ impl TestGenerator {
                             format!("destructive-{}-002", subcommand.name),
                             format!("Subcommand '{}' accepts --yes flag", subcommand.name),
                             TestCategory::DestructiveOps,
-                            format!("{} {}{} --yes", binary, subcommand.name, args_part),
+                            format!("\"$CLI_BINARY\" {}{} --yes", subcommand.name, args_part),
                         )
                         .with_tag("force".to_string())
                         .with_tag(subcommand.name.clone()),
@@ -567,7 +561,6 @@ impl TestGenerator {
     /// Generate directory traversal tests
     fn generate_directory_traversal_tests(&self) -> Result<Vec<TestCase>> {
         let mut tests = Vec::new();
-        let binary = &self.analysis.binary_name;
 
         // Test 1: Large directory (1000 files)
         tests.push(
@@ -575,7 +568,7 @@ impl TestGenerator {
                 "dir-traversal-001".to_string(),
                 "Handle directory with 1000 files".to_string(),
                 TestCategory::DirectoryTraversal,
-                format!("{} /tmp/test-large-dir", binary),
+                "\"$CLI_BINARY\" /tmp/test-large-dir".to_string(),
             )
             .with_tag("performance".to_string())
             .with_tag("large-dir".to_string()),
@@ -587,7 +580,7 @@ impl TestGenerator {
                 "dir-traversal-002".to_string(),
                 "Handle deeply nested directory (50 levels)".to_string(),
                 TestCategory::DirectoryTraversal,
-                format!("{} /tmp/test-deep-dir", binary),
+                "\"$CLI_BINARY\" /tmp/test-deep-dir".to_string(),
             )
             .with_tag("performance".to_string())
             .with_tag("deep-nesting".to_string()),
@@ -599,7 +592,7 @@ impl TestGenerator {
                 "dir-traversal-003".to_string(),
                 "Detect and handle symlink loops".to_string(),
                 TestCategory::DirectoryTraversal,
-                format!("{} /tmp/test-symlink-loop", binary),
+                "\"$CLI_BINARY\" /tmp/test-symlink-loop".to_string(),
             )
             .with_tag("symlink".to_string())
             .with_tag("loop-detection".to_string()),
@@ -611,7 +604,6 @@ impl TestGenerator {
     /// Generate performance tests
     fn generate_performance_tests(&self) -> Result<Vec<TestCase>> {
         let mut tests = Vec::new();
-        let binary = &self.analysis.binary_name;
 
         // Test 1: Startup time (help should be fast)
         tests.push(
@@ -619,7 +611,7 @@ impl TestGenerator {
                 "perf-001".to_string(),
                 "Startup time for --help < 100ms".to_string(),
                 TestCategory::Performance,
-                format!("{} --help", binary),
+                "\"$CLI_BINARY\" --help".to_string(),
             )
             .with_exit_code(0)
             .with_tag("startup".to_string())
@@ -632,7 +624,7 @@ impl TestGenerator {
                 "perf-002".to_string(),
                 "Memory usage stays within reasonable limits".to_string(),
                 TestCategory::Performance,
-                format!("{} --help", binary),
+                "\"$CLI_BINARY\" --help".to_string(),
             )
             .with_exit_code(0)
             .with_tag("memory".to_string())
@@ -645,7 +637,6 @@ impl TestGenerator {
     /// Generate multi-shell compatibility tests
     fn generate_multi_shell_tests(&self) -> Result<Vec<TestCase>> {
         let mut tests = Vec::new();
-        let binary = &self.analysis.binary_name;
 
         // Test basic command in different shells (bash, zsh, sh)
         for shell in &["bash", "zsh", "sh"] {
@@ -654,7 +645,7 @@ impl TestGenerator {
                     format!("multi-shell-{}", shell),
                     format!("Run --help in {}", shell),
                     TestCategory::MultiShell,
-                    format!("{} -c '{} --help'", shell, binary),
+                    format!("{} -c '\"$CLI_BINARY\" --help'", shell),
                 )
                 .with_exit_code(0)
                 .with_tag(shell.to_string()),
