@@ -152,6 +152,31 @@ as the Rust implementation offers:
 - Four report formats (vs. one in Bash)
 - Parallel processing support
 
+## [1.0.5] - 2025-11-12
+
+### Changed
+- **Dependency Updates**: All dependencies updated to latest versions via Dependabot
+  - GitHub Actions: upload-artifact v3→v4, download-artifact v3→v4, configure-pages 4→5
+  - indicatif: 0.17→0.18 (progress indicator improvements)
+  - thiserror: 1.0→2.0 (error handling enhancements)
+  - colored: 2.1→3.0 (terminal color output updates)
+  - criterion: 0.5→0.7 (benchmarking framework update, MSRV 1.80)
+
+### Fixed
+- **Breaking Change Migration**: criterion 0.5→0.7
+  - Migrated `criterion::black_box` to `std::hint::black_box` (benches/benchmark.rs)
+  - Updated to criterion 0.6+ API changes (removed deprecated `real_blackbox` feature)
+  - MSRV bumped to Rust 1.80 (required by criterion 0.6+)
+
+### Added
+- **Development Workflow**: `.claude/CLAUDE.md` Git Hooks configuration
+  - pre_commit: `cargo fmt` (1-2 seconds, automatic formatting)
+  - pre_push: `cargo clippy --all-features -- -D warnings` + `cargo test --all-features --lib --bins` (10-30 seconds)
+
+### Security
+- All dependencies audited with `cargo audit`: 0 vulnerabilities
+- All 7 Dependabot PRs merged after verification (100% success rate)
+
 ## [Unreleased]
 
 ### Planned for v1.1
@@ -165,5 +190,10 @@ as the Rust implementation offers:
 
 ## Version History
 
+- **1.0.5** (2025-11-12): Dependency updates (all 7 Dependabot PRs merged, MSRV 1.80)
+- **1.0.4** (2025-01-12): Documentation improvements (TARGET-TOOLS.md)
+- **1.0.3** (2025-01-12): Security test fixes (exit code 2 support)
+- **1.0.2** (2025-01-12): Directory traversal opt-in (--include-intensive)
+- **1.0.1** (2025-01-11): First production release
 - **1.0.0** (2025-11-11): Complete Rust v1.0 implementation with all 6 phases
 - **0.1.0** (Bash prototype): Initial Bash-based implementation (deprecated)

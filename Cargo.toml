@@ -1,6 +1,6 @@
 [package]
 name = "cli-testing-specialist"
-version = "1.0.4"
+version = "1.0.5"
 authors = ["Sanae Abe <sanae.abe@example.com>"]
 edition = "2021"
 license = "MIT"
