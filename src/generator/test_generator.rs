@@ -1,5 +1,9 @@
+use crate::analyzer::BehaviorInferrer;
 use crate::error::Result;
-use crate::types::{Assertion, CliAnalysis, CliOption, OptionType, TestCase, TestCategory};
+use crate::types::{
+    Assertion, CliAnalysis, CliOption, NoArgsBehavior, OptionType, TestCase, TestCategory,
+    TestPriority,
+};
 use rayon::prelude::*;
 
 /// Test generator for creating test cases from CLI analysis
@@ -135,16 +139,60 @@ impl TestGenerator {
             .with_tag("error-handling".to_string()),
         );
 
-        // Test 5: No arguments (may show help or error)
-        tests.push(
-            TestCase::new(
-                "basic-005".to_string(),
-                "Handle no arguments".to_string(),
-                TestCategory::Basic,
-                binary.to_string(),
-            )
-            .with_tag("no-args".to_string()),
-        );
+        // Test 5: No arguments (behavior depends on CLI type)
+        let inferrer = BehaviorInferrer::new();
+        let no_args_behavior = inferrer.infer_no_args_behavior(&self.analysis);
+
+        match no_args_behavior {
+            NoArgsBehavior::ShowHelp => {
+                tests.push(
+                    TestCase::new(
+                        "basic-005".to_string(),
+                        "Show help when invoked without arguments".to_string(),
+                        TestCategory::Basic,
+                        binary.to_string(),
+                    )
+                    .with_exit_code(0)
+                    // Output check removed: Some CLIs output nothing
+                    // (e.g., backup-suite exits silently with code 0)
+                    .with_priority(TestPriority::Important)
+                    .with_tag("no-args".to_string())
+                    .with_tag("show-help".to_string()),
+                );
+            }
+
+            NoArgsBehavior::RequireSubcommand => {
+                tests.push(
+                    TestCase::new(
+                        "basic-005".to_string(),
+                        "Require subcommand when invoked without arguments".to_string(),
+                        TestCategory::Basic,
+                        binary.to_string(),
+                    )
+                    .expect_nonzero_exit() // Accept exit 1 or 2
+                    // Output check removed: CLIs show different error formats
+                    // (short error message vs full help text)
+                    .with_priority(TestPriority::Important)
+                    .with_tag("no-args".to_string())
+                    .with_tag("require-subcommand".to_string()),
+                );
+            }
+
+            NoArgsBehavior::Interactive => {
+                tests.push(
+                    TestCase::new(
+                        "basic-005".to_string(),
+                        "Enter interactive mode when invoked without arguments".to_string(),
+                        TestCategory::Basic,
+                        format!("echo '' | {}", binary), // Pipe empty input to exit immediately
+                    )
+                    .with_exit_code(0)
+                    .with_priority(TestPriority::Important)
+                    .with_tag("no-args".to_string())
+                    .with_tag("interactive".to_string()),
+                );
+            }
+        }
 
         Ok(tests)
     }
@@ -220,6 +268,7 @@ impl TestGenerator {
                 format!("{} {} 'test; rm -rf /'", binary, string_option),
             )
             .expect_nonzero_exit() // Accept exit code 1, 2, or any non-zero
+            .with_priority(TestPriority::SecurityCheck)
             .with_tag("injection".to_string())
             .with_tag("critical".to_string()),
         );
@@ -234,6 +283,7 @@ impl TestGenerator {
                 format!(r#"{} {} $'/tmp/test\x00malicious'"#, binary, string_option),
             )
             .expect_nonzero_exit() // Accept exit code 1, 2, or any non-zero
+            .with_priority(TestPriority::SecurityCheck)
             .with_tag("injection".to_string())
             .with_tag("critical".to_string()),
         );
@@ -248,6 +298,7 @@ impl TestGenerator {
                 format!("{} {} ../../../etc/passwd", binary, string_option),
             )
             .expect_nonzero_exit() // Accept exit code 1, 2, or any non-zero
+            .with_priority(TestPriority::SecurityCheck)
             .with_tag("path-traversal".to_string())
             .with_tag("critical".to_string()),
         );
@@ -264,6 +315,7 @@ impl TestGenerator {
             )
             // No exit code expectation - this is informational
             // Tool may succeed (0) if properly sanitized, or fail (1) if rejected
+            .with_priority(TestPriority::Important) // Informational test
             .with_tag("buffer-overflow".to_string())
             .with_tag("informational".to_string()),
         );

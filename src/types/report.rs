@@ -2,6 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
+use super::test_priority::TestPriority;
+
 /// Test execution result for a single test case
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TestResult {
@@ -25,6 +27,14 @@ pub struct TestResult {
 
     /// Line number in BATS file
     pub line_number: Option<usize>,
+
+    /// Test tags extracted from BATS comments
+    #[serde(default)]
+    pub tags: Vec<String>,
+
+    /// Test priority (extracted from tags or metadata)
+    #[serde(default)]
+    pub priority: TestPriority,
 }
 
 /// Test execution status
@@ -53,6 +63,70 @@ impl TestStatus {
     /// Check if status represents success
     pub fn is_success(&self) -> bool {
         matches!(self, TestStatus::Passed)
+    }
+}
+
+/// Security vulnerability finding from security check tests
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SecurityFinding {
+    /// Test name that detected this vulnerability
+    pub test_name: String,
+
+    /// Vulnerability category (e.g., "injection", "path-traversal")
+    pub category: String,
+
+    /// Severity level
+    pub severity: SecuritySeverity,
+
+    /// Description of the vulnerability
+    pub description: String,
+
+    /// Test output showing the vulnerability
+    pub evidence: String,
+
+    /// File path where the security test is defined
+    pub test_file: String,
+}
+
+/// Security severity levels
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "lowercase")]
+pub enum SecuritySeverity {
+    /// Critical security issue
+    Critical,
+
+    /// High severity issue
+    High,
+
+    /// Medium severity issue
+    Medium,
+
+    /// Low severity issue
+    Low,
+
+    /// Informational finding
+    Info,
+}
+
+impl SecuritySeverity {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Critical => "critical",
+            Self::High => "high",
+            Self::Medium => "medium",
+            Self::Low => "low",
+            Self::Info => "info",
+        }
+    }
+
+    pub fn badge_color(&self) -> &'static str {
+        match self {
+            Self::Critical => "danger",
+            Self::High => "warning",
+            Self::Medium => "warning",
+            Self::Low => "info",
+            Self::Info => "secondary",
+        }
     }
 }
 
@@ -135,6 +209,10 @@ pub struct TestReport {
 
     /// Environment information
     pub environment: EnvironmentInfo,
+
+    /// Security vulnerabilities detected (extracted from SecurityCheck tests)
+    #[serde(default)]
+    pub security_findings: Vec<SecurityFinding>,
 }
 
 impl TestReport {
@@ -170,6 +248,86 @@ impl TestReport {
     /// Check if all tests passed
     pub fn all_passed(&self) -> bool {
         self.total_failed() == 0
+    }
+
+    /// Count tests by priority level
+    pub fn tests_by_priority(&self, priority: TestPriority) -> Vec<&TestResult> {
+        self.suites
+            .iter()
+            .flat_map(|suite| &suite.tests)
+            .filter(|test| test.priority == priority)
+            .collect()
+    }
+
+    /// Count security check tests
+    pub fn security_check_tests(&self) -> Vec<&TestResult> {
+        self.tests_by_priority(TestPriority::SecurityCheck)
+    }
+
+    /// Count passed security checks
+    pub fn passed_security_checks(&self) -> usize {
+        self.security_check_tests()
+            .iter()
+            .filter(|test| test.status.is_success())
+            .count()
+    }
+
+    /// Count failed security checks (potential vulnerabilities)
+    pub fn failed_security_checks(&self) -> usize {
+        self.security_check_tests()
+            .iter()
+            .filter(|test| test.status.is_failure())
+            .count()
+    }
+
+    /// Count template quality tests (non-security)
+    pub fn template_quality_tests(&self) -> Vec<&TestResult> {
+        self.suites
+            .iter()
+            .flat_map(|suite| &suite.tests)
+            .filter(|test| !test.priority.is_security_check())
+            .collect()
+    }
+
+    /// Count passed template quality tests
+    pub fn passed_template_quality(&self) -> usize {
+        self.template_quality_tests()
+            .iter()
+            .filter(|test| test.status.is_success())
+            .count()
+    }
+
+    /// Count failed template quality tests
+    pub fn failed_template_quality(&self) -> usize {
+        self.template_quality_tests()
+            .iter()
+            .filter(|test| test.status.is_failure())
+            .count()
+    }
+
+    /// Template quality success rate (excludes security checks)
+    pub fn template_quality_rate(&self) -> f64 {
+        let total = self.template_quality_tests().len();
+        if total == 0 {
+            0.0
+        } else {
+            self.passed_template_quality() as f64 / total as f64
+        }
+    }
+
+    /// Security check success rate
+    pub fn security_check_rate(&self) -> f64 {
+        let total = self.security_check_tests().len();
+        if total == 0 {
+            0.0
+        } else {
+            self.passed_security_checks() as f64 / total as f64
+        }
+    }
+
+    /// Number of detected vulnerabilities (failed security checks)
+    pub fn vulnerability_count(&self) -> usize {
+        self.security_findings.len()
     }
 }
 
@@ -249,6 +407,8 @@ mod tests {
                     error_message: None,
                     file_path: "/path/to/test.bats".to_string(),
                     line_number: Some(5),
+                    tags: vec![],
+                    priority: TestPriority::Important,
                 },
                 TestResult {
                     name: "test2".to_string(),
@@ -258,6 +418,8 @@ mod tests {
                     error_message: Some("assertion failed".to_string()),
                     file_path: "/path/to/test.bats".to_string(),
                     line_number: Some(10),
+                    tags: vec![],
+                    priority: TestPriority::Important,
                 },
                 TestResult {
                     name: "test3".to_string(),
@@ -267,6 +429,8 @@ mod tests {
                     error_message: None,
                     file_path: "/path/to/test.bats".to_string(),
                     line_number: Some(15),
+                    tags: vec![],
+                    priority: TestPriority::Important,
                 },
             ],
             duration: Duration::from_millis(300),
@@ -295,6 +459,8 @@ mod tests {
                     error_message: None,
                     file_path: "/path/to/suite1.bats".to_string(),
                     line_number: Some(5),
+                    tags: vec![],
+                    priority: TestPriority::Important,
                 },
                 TestResult {
                     name: "test2".to_string(),
@@ -304,6 +470,8 @@ mod tests {
                     error_message: Some("error".to_string()),
                     file_path: "/path/to/suite1.bats".to_string(),
                     line_number: Some(10),
+                    tags: vec![],
+                    priority: TestPriority::Important,
                 },
             ],
             duration: Duration::from_millis(200),
@@ -322,6 +490,8 @@ mod tests {
                 error_message: None,
                 file_path: "/path/to/suite2.bats".to_string(),
                 line_number: Some(5),
+                tags: vec![],
+                priority: TestPriority::Important,
             }],
             duration: Duration::from_millis(150),
             started_at: Utc::now(),
@@ -336,6 +506,7 @@ mod tests {
             started_at: Utc::now(),
             finished_at: Utc::now(),
             environment: EnvironmentInfo::default(),
+            security_findings: vec![],
         };
 
         assert_eq!(report.total_tests(), 3);

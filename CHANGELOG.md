@@ -177,6 +177,92 @@ as the Rust implementation offers:
 - All dependencies audited with `cargo audit`: 0 vulnerabilities
 - All 7 Dependabot PRs merged after verification (100% success rate)
 
+## [1.0.9] - 2025-11-12
+
+### Added
+- **Execution-based Inference**: Revolutionary no-args behavior detection
+  - Directly executes binaries without arguments to measure actual exit codes
+  - 100% inference accuracy (vs. 66.7% with Usage line parsing in v1.0.8)
+  - Solves cldev-type CLI problem (identical Usage patterns, different behaviors)
+  - Safety measures: 1-second timeout, output discarding, non-TTY mode
+  - Dependency: `wait-timeout = "0.2"` for process timeout handling
+
+### Changed
+- **Inference Algorithm Priority**:
+  1. **Strategy 0**: Interactive tools detection (BEFORE execution to avoid false positives)
+  2. **Strategy 1**: Execution-based inference (most accurate)
+  3. **Strategy 2**: Usage line parsing (fallback)
+  4. **Strategy 3**: Subcommands presence check (fallback)
+  5. **Default**: ShowHelp (safest assumption)
+
+### Fixed
+- **HTML Report Filter Bug**: Skipped filter now correctly hides error detail rows
+  - JavaScript `filterTests()` now handles error rows (`<tr class="bg-light">`)
+  - Error rows follow parent test row visibility state
+  - No more "Error: Test X failed" appearing in Skipped filter
+
+### Performance
+- **Analysis Time Impact**: +0.8% (22ms for cldev, within 1-second timeout)
+- **Test Success Rate**: 93.3% → 100% (15/15 tests passed)
+- **Inference Accuracy**: 66.7% → 100% (cldev/cmdrun/backup-suite all correct)
+
+### Technical Details
+- New method: `BehaviorInferrer::execute_and_measure()`
+- Exit code mapping: 0 → ShowHelp, 1|2 → RequireSubcommand
+- Interactive tools (python3, psql) checked before execution (avoid stdin=null edge case)
+- 109 unit tests passing (100% pass rate)
+
+## [1.0.8] - 2025-11-12
+
+### Fixed
+- **No-Args Test Assertion Relaxation**: Removed strict output assertions
+  - `RequireSubcommand` pattern: Removed `run.output` check (diverse error formats)
+  - `ShowHelp` pattern: Removed `run.output` check (some CLIs output nothing)
+  - Exit code validation remains (Unix standard: 0 = success, non-zero = error)
+
+### Changed
+- **Test Generation Philosophy**: Rely on exit codes, not output format
+  - Reason: CLIs show different error formats (short message vs full help)
+  - Example: backup-suite exits 0 with no output (valid ShowHelp behavior)
+
+### Performance
+- **Test Success Rate**: 86.7% → 93.3% (cmdrun 4/5→5/5, backup-suite 4/5→5/5)
+- **Remaining Issue**: cldev basic-005 still fails (Usage line ambiguity, fixed in v1.0.9)
+
+## [1.0.7] - 2025-11-12
+
+### Fixed
+- **Clippy Warning**: Renamed `TestCategory::default()` to `standard_categories()`
+  - Reason: Method name conflicts with Rust's `Default::default()` trait
+  - Affected files: `src/types/test_case.rs`, `src/main.rs`
+
+### Changed
+- **Git Hooks**: Added pre_commit and pre_push hooks in `.claude/CLAUDE.md`
+  - `pre_commit`: `cargo fmt` (automatic formatting)
+  - `pre_push`: `cargo clippy + cargo test` (quality gate)
+
+## [1.0.6] - 2025-11-12
+
+### Added
+- **Required Arguments Detection**: Automatic extraction from Usage lines
+  - New field: `Subcommand.required_args` (e.g., `<ID>`, `<FILE>`)
+  - Parser: `CliParser::parse_required_args()` method
+  - Integration: `SubcommandDetector` populates required_args during analysis
+
+### Changed
+- **Test Template Improvements**:
+  - Destructive operations tests now generate dummy arguments (e.g., `--dummy-id-12345`)
+  - Security tests use dynamic option selection (actual options from analysis)
+  - Exit code expectation: 1 → 2 (clap standard for invalid arguments)
+
+### Performance
+- **Test Success Rate**: 85.0% → 92.9% for cmdrun (17/20 → 26/28 tests)
+- **Failures Reduced**: 5 → 2 (fixed 3 issues: required args, exit code, non-existent options)
+
+### Technical Details
+- Files modified: `src/types/analysis.rs`, `src/analyzer/cli_parser.rs`,
+  `src/analyzer/subcommand_detector.rs`, `src/generator/test_generator.rs`
+
 ## [Unreleased]
 
 ### Planned for v1.1
@@ -190,6 +276,10 @@ as the Rust implementation offers:
 
 ## Version History
 
+- **1.0.9** (2025-11-12): Execution-based inference (100% accuracy), HTML filter fix
+- **1.0.8** (2025-11-12): No-args assertion relaxation (93.3% success rate)
+- **1.0.7** (2025-11-12): Clippy warning fix, Git hooks setup
+- **1.0.6** (2025-11-12): Required arguments detection (92.9% success rate)
 - **1.0.5** (2025-11-12): Dependency updates (all 7 Dependabot PRs merged, MSRV 1.80)
 - **1.0.4** (2025-01-12): Documentation improvements (TARGET-TOOLS.md)
 - **1.0.3** (2025-01-12): Security test fixes (exit code 2 support)

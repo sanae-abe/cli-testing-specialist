@@ -188,14 +188,57 @@ fn main() -> Result<()> {
             println!("Running BATS tests from: {}", test_dir.display());
             let report = executor.run_tests(&test_dir)?;
 
-            // 4. Display summary
+            // 4. Display summary with priority-based breakdown
             println!("\n=== Test Results ===");
-            println!("Total tests: {}", report.total_tests());
-            println!("Passed: {}", report.total_passed());
-            println!("Failed: {}", report.total_failed());
-            println!("Skipped: {}", report.total_skipped());
-            println!("Success rate: {:.1}%", report.success_rate() * 100.0);
-            println!("Duration: {:.2}s", report.total_duration.as_secs_f64());
+
+            // Template Quality (non-security tests)
+            let template_total = report.template_quality_tests().len();
+            let template_passed = report.passed_template_quality();
+            println!(
+                "Template Quality: {}/{} tests passed ({:.1}%)",
+                template_passed,
+                template_total,
+                report.template_quality_rate() * 100.0
+            );
+
+            // Security Checks
+            let security_total = report.security_check_tests().len();
+            let security_passed = report.passed_security_checks();
+            let security_failed = report.failed_security_checks();
+            if security_total > 0 {
+                println!(
+                    "Security Checks: {}/{} passed ({} vulnerabilities detected)",
+                    security_passed,
+                    security_total,
+                    security_failed
+                );
+
+                // Display vulnerability warnings
+                if security_failed > 0 {
+                    println!("\n⚠️  Security Vulnerabilities Found:");
+                    for test in report.security_check_tests() {
+                        if test.status.is_failure() {
+                            // Extract vulnerability type from test name or tags
+                            let vuln_type = if test.tags.contains(&"injection".to_string()) {
+                                "Command Injection"
+                            } else if test.tags.contains(&"path-traversal".to_string()) {
+                                "Path Traversal"
+                            } else {
+                                "Security Issue"
+                            };
+                            println!("  • {} ({})", vuln_type, test.name);
+                        }
+                    }
+                }
+            }
+
+            // Overall summary
+            println!(
+                "\nOverall: {}/{} tests executed in {:.2}s",
+                report.total_passed() + report.total_failed(),
+                report.total_tests(),
+                report.total_duration.as_secs_f64()
+            );
 
             // 5. Ensure output directory exists
             fs::create_dir_all(&output)?;

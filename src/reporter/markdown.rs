@@ -180,6 +180,8 @@ mod tests {
                     error_message: None,
                     file_path: "/path/to/test.bats".to_string(),
                     line_number: Some(5),
+                    tags: vec![],
+                    priority: crate::types::TestPriority::Important,
                 },
                 TestResult {
                     name: "failed test".to_string(),
@@ -189,6 +191,8 @@ mod tests {
                     error_message: Some("assertion failed".to_string()),
                     file_path: "/path/to/test.bats".to_string(),
                     line_number: Some(10),
+                    tags: vec![],
+                    priority: crate::types::TestPriority::Important,
                 },
             ],
             duration: Duration::from_millis(350),
@@ -204,6 +208,7 @@ mod tests {
             started_at: Utc::now(),
             finished_at: Utc::now(),
             environment: EnvironmentInfo::default(),
+            security_findings: vec![],
         }
     }
 
@@ -254,6 +259,8 @@ mod tests {
                 error_message: None,
                 file_path: "/test.bats".to_string(),
                 line_number: None,
+                tags: vec![],
+                priority: crate::types::TestPriority::Important,
             }],
             duration: Duration::from_millis(100),
             started_at: Utc::now(),
@@ -268,6 +275,7 @@ mod tests {
             started_at: Utc::now(),
             finished_at: Utc::now(),
             environment: EnvironmentInfo::default(),
+            security_findings: vec![],
         };
 
         let temp_file = NamedTempFile::new().unwrap();

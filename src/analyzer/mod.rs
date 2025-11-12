@@ -43,10 +43,12 @@
 //! - Memory limits (configurable)
 //! - Recursion depth limits for subcommands (max: 5 levels)
 
+pub mod behavior_inferrer;
 pub mod cli_parser;
 pub mod option_inferrer;
 pub mod subcommand_detector;
 
+pub use behavior_inferrer::BehaviorInferrer;
 pub use cli_parser::CliParser;
 pub use option_inferrer::{apply_numeric_constraints, load_enum_values, OptionInferrer};
 pub use subcommand_detector::SubcommandDetector;

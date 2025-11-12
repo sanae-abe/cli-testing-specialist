@@ -1,6 +1,6 @@
 [package]
 name = "cli-testing-specialist"
-version = "1.0.6"
+version = "1.0.9"
 authors = ["Sanae Abe <sanae.abe@example.com>"]
 edition = "2021"
 license = "MIT"
@@ -49,6 +49,9 @@ indicatif = "0.18"
 
 # System information
 hostname = "0.4"
+
+# Process timeout
+wait-timeout = "0.2"
 
 # Unix system calls (for resource limits)
 [target.'cfg(unix)'.dependencies]

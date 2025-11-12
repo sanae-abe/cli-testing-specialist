@@ -432,13 +432,35 @@ impl HtmlReporter {
             const rows = document.querySelectorAll('#resultsTable tbody tr');
 
             rows.forEach(row => {
+                // Check if this is an error detail row (has bg-light class, no badge)
+                const isErrorRow = row.classList.contains('bg-light') || row.querySelector('td[colspan]');
+
+                if (isErrorRow) {
+                    // Error rows: hide if previous main row is hidden
+                    const prevRow = row.previousElementSibling;
+                    if (prevRow && prevRow.style.display === 'none') {
+                        row.style.display = 'none';
+                    } else if (status === 'all') {
+                        row.style.display = '';
+                    }
+                    return;
+                }
+
+                // Main test rows
                 if (status === 'all') {
                     row.style.display = '';
                 } else {
                     const statusBadge = row.querySelector('.badge');
                     if (statusBadge) {
                         const badgeText = statusBadge.textContent.toLowerCase();
-                        row.style.display = badgeText.includes(status) ? '' : 'none';
+                        const shouldShow = badgeText.includes(status);
+                        row.style.display = shouldShow ? '' : 'none';
+
+                        // Hide next error row if this test is hidden
+                        const nextRow = row.nextElementSibling;
+                        if (!shouldShow && nextRow && (nextRow.classList.contains('bg-light') || nextRow.querySelector('td[colspan]'))) {
+                            nextRow.style.display = 'none';
+                        }
                     }
                 }
             });
@@ -474,6 +496,8 @@ mod tests {
                     error_message: None,
                     file_path: "/path/to/test.bats".to_string(),
                     line_number: Some(5),
+                    tags: vec![],
+                    priority: crate::types::TestPriority::Important,
                 },
                 TestResult {
                     name: "failed test".to_string(),
@@ -483,6 +507,8 @@ mod tests {
                     error_message: Some("assertion failed".to_string()),
                     file_path: "/path/to/test.bats".to_string(),
                     line_number: Some(10),
+                    tags: vec![],
+                    priority: crate::types::TestPriority::Important,
                 },
             ],
             duration: Duration::from_millis(350),
@@ -498,6 +524,7 @@ mod tests {
             started_at: Utc::now(),
             finished_at: Utc::now(),
             environment: EnvironmentInfo::default(),
+            security_findings: vec![],
         }
     }
 

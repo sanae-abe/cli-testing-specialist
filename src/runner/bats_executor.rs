@@ -247,6 +247,7 @@ impl BatsExecutor {
             started_at,
             finished_at,
             environment,
+            security_findings: vec![], // TODO: Extract from SecurityCheck tests
         })
     }
 
@@ -401,6 +402,8 @@ impl BatsExecutor {
                     },
                     file_path: bats_file.to_string_lossy().to_string(),
                     line_number: None,
+                    tags: vec![], // TODO: Extract from BATS comments
+                    priority: crate::types::TestPriority::Important, // TODO: Determine from test metadata
                 });
 
                 debug!("Parsed test: {} - {:?}", test_name, status);

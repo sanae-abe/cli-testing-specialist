@@ -1,3 +1,4 @@
+use crate::types::test_priority::TestPriority;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -27,6 +28,10 @@ pub struct TestCase {
 
     /// Tags for categorization
     pub tags: Vec<String>,
+
+    /// Test priority (default: Important)
+    #[serde(default)]
+    pub priority: TestPriority,
 }
 
 /// Test category classification
@@ -93,6 +98,7 @@ impl TestCase {
             expected_exit: Some(0), // Default to success
             assertions: Vec::new(),
             tags: Vec::new(),
+            priority: TestPriority::default(), // Default to Important
         }
     }
 
@@ -117,6 +123,12 @@ impl TestCase {
     /// Expect any non-zero exit code (for security tests)
     pub fn expect_nonzero_exit(mut self) -> Self {
         self.expected_exit = None;
+        self
+    }
+
+    /// Set test priority
+    pub fn with_priority(mut self, priority: TestPriority) -> Self {
+        self.priority = priority;
         self
     }
 }
