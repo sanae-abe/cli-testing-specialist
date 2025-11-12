@@ -2,7 +2,7 @@
 
 **Languages**: [English](README.md) | [日本語](README.ja.md)
 
-**Version**: 1.0.3
+**Version**: 1.0.4
 **Last Updated**: 2025-01-12
 **Status**: Production Ready
 **License**: MIT
@@ -415,6 +415,21 @@ For major changes, please open an issue first to discuss the proposed changes.
 ---
 
 ## Changelog
+
+### v1.0.4 (2025-01-12)
+
+**Documentation Improvements** 📚:
+- Added comprehensive `docs/TARGET-TOOLS.md` guide for tool compatibility assessment
+- Tool classification system: High/Medium/Low compatibility with success rate estimates
+- CI/CD integration modes: Standard (Strict), Informational (Lenient), Security-Only (Focused)
+- Real-world statistics from 4 projects: backup-suite, cmdrun, cldev, package-publisher
+- Best practices for progressive adoption and category selection
+- Added `todo.md` for project roadmap and improvement tracking
+
+**Impact**:
+- Users can now determine if cli-testing-specialist is suitable for their CLI tool
+- Clear guidance on informational mode for custom implementation tools (30-60% success rate)
+- Documented that security testing is valuable for ALL CLI tools regardless of compatibility
 
 ### v1.0.3 (2025-01-12)
 
