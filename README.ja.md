@@ -130,7 +130,21 @@ cli-testing-specialistは**標準的なCLIツール**向けに最適化されて
 - コンテナ管理（docker、podman）
 - カスタムプロトコルを持つドメイン特化型ツール
 
-**完全なガイドラインとベストプラクティスは[docs/TARGET-TOOLS.md](./docs/TARGET-TOOLS.md)を参照してください。**
+### 🌐 言語サポート状況
+
+**✅ テスト済み・サポート**:
+- C/C++ (getopt、カスタムパーサー) - curl、git
+- Rust (clap) - backup-suite、cmdrun、cldev
+- Node.js (commander) - package-publisher
+
+**⚠️ 未テスト（推定70-80%互換）**:
+- **Go** (cobra、urfave/cli) - gh、kubectl、docker
+- **Python** (argparse対応必要、click/typerは動作見込み)
+- **Ruby** (thor、gli)
+
+**📋 テスト予定**: v1.1.0以降
+
+**完全なガイドライン、言語別詳細、ベストプラクティスは[docs/TARGET-TOOLS.md](./docs/TARGET-TOOLS.md)を参照してください。**
 
 ---
 

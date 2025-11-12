@@ -309,12 +309,14 @@ Is your tool a standard CLI?
 |---------|------|----------|--------|-------------|-------|
 | **curl** | Standard | C | getopt | 95% (43/45) | Ideal target |
 | **git** | Standard | C | custom | 90% (41/45) | Complex but standard |
-| **package-publisher** | Standard | Node.js | commander | 85-90%* | Node.js CLI (estimated) |
-| **backup-suite** | Custom | Rust | clap | 85%* (40/47) | After v1.0.3 fix |
-| **cmdrun** | Config-driven | Rust | clap | 85%* (42/49) | After v1.0.3 fix |
-| **cldev** | Custom UI | Rust | clap | 85%* (42/49) | After v1.0.3 fix |
+| **package-publisher** | Standard | Node.js | commander | 73.7% (14/19)* | After v1.0.9 fix |
+| **backup-suite** | Custom | Rust | clap | 85%† (40/47) | After v1.0.3 fix |
+| **cmdrun** | Config-driven | Rust | clap | 85%† (42/49) | After v1.0.3 fix |
+| **cldev** | Custom UI | Rust | clap | 85%† (42/49) | After v1.0.3 fix |
+| **gh/kubectl/docker** | Standard | **Go** | cobra | **Untested** | Estimated 70-80% |
 
-\* Estimated with v1.0.3 security test fix (was 68-71% in v1.0.2)
+\* Real test results with v1.0.9 (Commander.js support + template fixes)
+† Estimated with v1.0.3 security test fix (was 68-71% in v1.0.2)
 
 ### Category Success Rates
 
@@ -349,6 +351,212 @@ Is your tool a standard CLI?
 4. **Environment setup**: 14% of all failures
    - Root cause: Missing dependencies in CI
    - **Recommendation**: Provide template configs
+
+---
+
+## Language-Specific Compatibility
+
+### Go CLI Tools (Untested)
+
+**Estimated Compatibility**: 70-80% (for standard cobra-based tools)
+
+#### Expected Support
+
+**✅ Likely Compatible**:
+- **cobra** (kubectl, gh, docker, hugo) - Standard format with `Commands:` section
+- **urfave/cli** (rclone, cli) - Standard format similar to cobra
+- **flag** (standard library) - Simple format, minimal subcommands
+
+**Pattern Example (cobra)**:
+```
+Available Commands:
+  init        Initialize something
+  build       Build something
+  help        Help about any command
+```
+
+**Detection Status**: Should match existing regex pattern `^\s{2,}([a-z][a-z0-9-]+)\s{2,}(.+)$`
+
+#### Potential Issues
+
+**⚠️ Unverified**:
+- **cobra with [flags]**: `init [flags]  Description`
+  - Should work with v1.0.9 Commander.js fix: `(?:\s+\[[^\]]+\])*`
+- **Environment variable dependencies**: Common in Go CLIs (e.g., `KUBECONFIG`, `DOCKER_HOST`)
+  - Same as Medium Compatibility tools (provide template configs)
+- **Custom help formatters**: Some Go CLIs customize cobra's output
+  - May require template adjustments
+
+#### Testing Recommendations
+
+**For Go CLI authors**:
+```bash
+# Test your Go CLI
+cli-testing-specialist analyze /path/to/your-go-cli -o analysis.json
+
+# Check subcommand detection
+jq '.metadata.total_subcommands' analysis.json
+
+# Generate and run tests
+cli-testing-specialist generate analysis.json -o tests -c basic,help,security
+cli-testing-specialist run tests -f all -o reports
+
+# Review results
+open reports/tests-report.html
+```
+
+**Expected Results**:
+- Basic tests: 80-90% success
+- Help tests: 70-80% success (depends on help format)
+- Security tests: 100% success (v1.0.3+)
+
+#### Validation Status
+
+**Current Status**:
+- ❌ No real-world Go CLI testing performed
+- ✅ Regex patterns should support cobra format
+- ✅ Commander.js fix (v1.0.9) helps with `[flags]` syntax
+- ⚠️ Waiting for community feedback
+
+**Planned**: Real-world testing with gh, kubectl, docker in v1.1.0+
+
+**Contribute**: If you test cli-testing-specialist with your Go CLI, please share results via [GitHub Issues](https://github.com/sanae-abe/cli-testing-specialist/issues)!
+
+---
+
+### Python CLI Tools (Untested - High Priority)
+
+**Estimated Compatibility**: 60-80% (for argparse/click-based tools)
+
+#### Expected Support
+
+**✅ Likely Compatible**:
+- **click** (black, pytest, flask) - Clean format, similar to Commander.js
+- **typer** (FastAPI CLI) - Modern, built on click
+- **fire** (Google) - Simple, minimal help text
+
+**⚠️ Potential Issues**:
+- **argparse** (pip, aws-cli, youtube-dl) - Uses `positional arguments:` for subcommands
+  - **Known Issue**: Current `SUBCOMMAND_HEADERS` doesn't include this header
+  - May result in 0 subcommands detected
+
+**Pattern Example (argparse)**:
+```
+usage: tool.py [-h] [--version] command ...
+
+positional arguments:
+  command
+    init      Initialize project
+    build     Build project
+
+optional arguments:
+  -h, --help  show this help message and exit
+```
+
+**Detection Status**:
+- ❌ argparse format NOT supported yet (missing `positional arguments:` header)
+- ✅ click/typer format should work (uses `Commands:`)
+
+#### Required Fix for argparse Support
+
+```rust
+// src/analyzer/subcommand_detector.rs
+static ref SUBCOMMAND_HEADERS: Vec<&'static str> = vec![
+    "Commands:",
+    "Available Commands:",
+    "Subcommands:",
+    "positional arguments:",  // Python argparse
+];
+```
+
+#### Validation Status
+
+**Current Status**:
+- ❌ No real-world Python CLI testing performed
+- ❌ argparse subcommand detection not supported
+- ✅ click/typer likely work without changes
+
+**Planned**: Python argparse support in v1.1.0
+
+---
+
+### Ruby CLI Tools (Untested)
+
+**Estimated Compatibility**: 70-85% (for thor-based tools)
+
+#### Expected Support
+
+**✅ Likely Compatible**:
+- **thor** (rails, bundler) - Standard cobra-like format
+- **gli** (Git-like interface) - Standard format
+
+**Pattern Example (thor)**:
+```
+Commands:
+  app init        # Initialize application
+  app build       # Build application
+  app help [TASK] # Describe available commands
+```
+
+**Detection Status**: Should work with existing regex patterns
+
+**Planned**: Validation testing in v1.1.0+
+
+---
+
+### Java CLI Tools (Untested)
+
+**Estimated Compatibility**: 50-70% (for picocli-based tools)
+
+#### Expected Support
+
+**⚠️ Medium Compatibility**:
+- **picocli** - Modern, annotation-based
+- **JCommander** - Classic framework
+- **Apache Commons CLI** - Minimal subcommand support
+
+**Potential Issues**:
+- JVM startup overhead → Performance tests may fail
+- Complex help formatting → May need custom parsing
+- Less common for CLI tools → Lower priority
+
+**Planned**: Community-driven (low priority)
+
+---
+
+### Other Languages (Low Priority)
+
+| Language | Popularity | Main Framework | Est. Compatibility | Notes |
+|----------|-----------|---------------|-------------------|-------|
+| **C++** | ⭐⭐ | Boost.Program_options, cxxopts | 60-75% | Standard format likely works |
+| **Swift** | ⭐ | ArgumentParser (Apple) | 70-80% | Modern, clean format |
+| **Kotlin** | ⭐ | kotlinx-cli, clikt | 60-75% | JVM-based, similar to Java |
+| **Perl** | ⭐ | Getopt::Long | 70-80% | Classic Unix format |
+| **PHP** | ⭐ | Symfony Console | 50-70% | Complex framework |
+| **Zig** | ⭐ | std.process (built-in) | 70-80% | Simple, modern |
+| **Nim** | ⭐ | cligen | 65-75% | Minimal ecosystem |
+
+---
+
+### Language Support Roadmap
+
+#### v1.1.0 (Next Release)
+- ✅ **Python argparse** support (`positional arguments:` header)
+- ✅ **Go cobra** validation testing (gh, kubectl, docker)
+- ⚠️ **Ruby thor** validation testing (rails, bundler)
+
+#### v1.2.0 (Future)
+- Community-requested languages based on GitHub Issues
+- Java, C++, Swift support (if demand exists)
+
+#### Community Contributions Welcome
+If you use cli-testing-specialist with:
+- Python (argparse, click, typer)
+- Ruby (thor, gli)
+- Java (picocli, JCommander)
+- Any other language
+
+Please share your results via [GitHub Issues](https://github.com/sanae-abe/cli-testing-specialist/issues)!
 
 ---
 
