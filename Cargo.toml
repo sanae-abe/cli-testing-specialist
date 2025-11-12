@@ -28,7 +28,7 @@ rayon = "1.8"
 
 # Error handling
 anyhow = "1.0"
-thiserror = "1.0"
+thiserror = "2.0"
 
 # Regex
 regex = "1.10"
