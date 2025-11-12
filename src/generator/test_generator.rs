@@ -122,6 +122,7 @@ impl TestGenerator {
         }
 
         // Test 4: Invalid option
+        // Note: clap returns exit code 2 for invalid options (Unix standard)
         tests.push(
             TestCase::new(
                 "basic-004".to_string(),
@@ -129,7 +130,7 @@ impl TestGenerator {
                 TestCategory::Basic,
                 format!("{} --invalid-option-xyz", binary),
             )
-            .with_exit_code(1)
+            .with_exit_code(2) // clap standard: 2 for usage errors
             .with_assertion(Assertion::OutputContains("error".to_string()))
             .with_tag("error-handling".to_string()),
         );
@@ -196,6 +197,19 @@ impl TestGenerator {
         let mut tests = Vec::new();
         let binary = &self.analysis.binary_name;
 
+        // Find a string option for testing (prefer --config, --file, or first string option)
+        let string_option = self
+            .analysis
+            .global_options
+            .iter()
+            .find(|opt| {
+                matches!(opt.option_type, OptionType::String | OptionType::Path)
+                    && opt.long.is_some()
+            })
+            .and_then(|opt| opt.long.as_ref())
+            .unwrap_or(&"--invalid-option".to_string())
+            .clone();
+
         // Test 1: Command injection via option
         // MUST reject malicious input (any non-zero exit code)
         tests.push(
@@ -203,7 +217,7 @@ impl TestGenerator {
                 "security-001".to_string(),
                 "Reject command injection in option value".to_string(),
                 TestCategory::Security,
-                format!("{} --name 'test; rm -rf /'", binary),
+                format!("{} {} 'test; rm -rf /'", binary, string_option),
             )
             .expect_nonzero_exit() // Accept exit code 1, 2, or any non-zero
             .with_tag("injection".to_string())
@@ -217,7 +231,7 @@ impl TestGenerator {
                 "security-002".to_string(),
                 "Reject null byte in option value".to_string(),
                 TestCategory::Security,
-                format!(r#"{} --file $'/tmp/test\x00malicious'"#, binary),
+                format!(r#"{} {} $'/tmp/test\x00malicious'"#, binary, string_option),
             )
             .expect_nonzero_exit() // Accept exit code 1, 2, or any non-zero
             .with_tag("injection".to_string())
@@ -231,7 +245,7 @@ impl TestGenerator {
                 "security-003".to_string(),
                 "Reject path traversal attempt".to_string(),
                 TestCategory::Security,
-                format!("{} --file ../../../etc/passwd", binary),
+                format!("{} {} ../../../etc/passwd", binary, string_option),
             )
             .expect_nonzero_exit() // Accept exit code 1, 2, or any non-zero
             .with_tag("path-traversal".to_string())
@@ -246,7 +260,7 @@ impl TestGenerator {
                 "security-004".to_string(),
                 "Handle extremely long input".to_string(),
                 TestCategory::Security,
-                format!("{} --name '{}'", binary, long_input),
+                format!("{} {} '{}'", binary, string_option, long_input),
             )
             // No exit code expectation - this is informational
             // Tool may succeed (0) if properly sanitized, or fail (1) if rejected
@@ -433,13 +447,35 @@ impl TestGenerator {
                 .any(|keyword| subcommand.name.to_lowercase().contains(keyword));
 
             if is_destructive {
+                // Generate dummy values for required arguments
+                let dummy_args = subcommand
+                    .required_args
+                    .iter()
+                    .map(|arg| {
+                        // Generate appropriate dummy value based on argument name
+                        match arg.to_lowercase().as_str() {
+                            "id" | "name" => "test-id",
+                            "file" | "path" => "/tmp/test-file",
+                            "dir" | "directory" => "/tmp/test-dir",
+                            _ => "test-value",
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" ");
+
+                let args_part = if dummy_args.is_empty() {
+                    String::new()
+                } else {
+                    format!(" {}", dummy_args)
+                };
+
                 // Test 1: Check for confirmation prompt
                 tests.push(
                     TestCase::new(
                         format!("destructive-{}-001", subcommand.name),
                         format!("Subcommand '{}' requires confirmation", subcommand.name),
                         TestCategory::DestructiveOps,
-                        format!("echo 'n' | {} {}", binary, subcommand.name),
+                        format!("echo 'n' | {} {}{}", binary, subcommand.name, args_part),
                     )
                     .with_assertion(Assertion::OutputContains("confirm".to_string()))
                     .with_tag("confirmation".to_string())
@@ -459,7 +495,7 @@ impl TestGenerator {
                             format!("destructive-{}-002", subcommand.name),
                             format!("Subcommand '{}' accepts --yes flag", subcommand.name),
                             TestCategory::DestructiveOps,
-                            format!("{} {} --yes", binary, subcommand.name),
+                            format!("{} {}{} --yes", binary, subcommand.name, args_part),
                         )
                         .with_tag("force".to_string())
                         .with_tag(subcommand.name.clone()),
@@ -639,6 +675,7 @@ mod tests {
                 required: false,
                 default_value: None,
             }],
+            required_args: vec![],
             subcommands: vec![],
             depth: 0,
         });

@@ -38,6 +38,10 @@ pub struct Subcommand {
     /// Options specific to this subcommand
     pub options: Vec<CliOption>,
 
+    /// Required positional arguments (e.g., <ID>, <FILE>)
+    #[serde(default)]
+    pub required_args: Vec<String>,
+
     /// Nested subcommands (recursive structure)
     pub subcommands: Vec<Subcommand>,
 
@@ -193,6 +197,7 @@ mod tests {
             name: "nested".to_string(),
             description: None,
             options: vec![],
+            required_args: vec![],
             subcommands: vec![],
             depth: 2,
         };
@@ -201,6 +206,7 @@ mod tests {
             name: "parent".to_string(),
             description: None,
             options: vec![],
+            required_args: vec![],
             subcommands: vec![nested],
             depth: 1,
         };
@@ -216,10 +222,12 @@ mod tests {
                 name: "cmd1".to_string(),
                 description: None,
                 options: vec![],
+                required_args: vec![],
                 subcommands: vec![Subcommand {
                     name: "subcmd1".to_string(),
                     description: None,
                     options: vec![],
+                    required_args: vec![],
                     subcommands: vec![],
                     depth: 1,
                 }],
@@ -229,6 +237,7 @@ mod tests {
                 name: "cmd2".to_string(),
                 description: None,
                 options: vec![],
+                required_args: vec![],
                 subcommands: vec![],
                 depth: 0,
             },

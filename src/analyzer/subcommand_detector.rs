@@ -115,6 +115,9 @@ impl SubcommandDetector {
             // Infer option types
             self.option_inferrer.infer_types(&mut options);
 
+            // Parse required positional arguments
+            let required_args = cli_parser.parse_required_args(&subcommand_help);
+
             // Recursively detect nested subcommands
             let nested_subcommands =
                 self.detect_recursive(binary, &subcommand_help, current_depth + 1, visited)?;
@@ -123,6 +126,7 @@ impl SubcommandDetector {
                 name,
                 description: Some(description),
                 options,
+                required_args,
                 subcommands: nested_subcommands,
                 depth: current_depth,
             });
