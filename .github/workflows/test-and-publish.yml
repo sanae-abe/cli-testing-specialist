@@ -68,7 +68,7 @@ jobs:
             --skip destructive-ops,directory-traversal
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: test-results-${{ matrix.os }}-${{ matrix.shell }}
           path: reports-${{ matrix.os }}-${{ matrix.shell }}/
@@ -76,7 +76,7 @@ jobs:
 
       - name: Upload HTML report for Pages
         if: matrix.os == 'ubuntu-latest' && matrix.shell == 'bash'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: html-report
           path: reports-${{ matrix.os }}-${{ matrix.shell }}/*.html
