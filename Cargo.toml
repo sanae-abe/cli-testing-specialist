@@ -42,7 +42,7 @@ log = "0.4"
 env_logger = "0.11"
 
 # Terminal colors
-colored = "2.1"
+colored = "3.0"
 
 # Progress indicators
 indicatif = "0.18"
