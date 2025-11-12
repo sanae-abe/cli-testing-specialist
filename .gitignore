@@ -79,3 +79,4 @@ combined-integration-test/
 Cargo.lock
 **/*.rs.bk
 *.pdb
+.publish-state.json
