@@ -97,7 +97,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download HTML report
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: html-report
           path: public/
