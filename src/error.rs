@@ -58,7 +58,7 @@ pub enum CliTestError {
 
     /// YAML serialization/deserialization error
     #[error(transparent)]
-    Yaml(#[from] serde_yml::Error),
+    Yaml(#[from] serde_yaml::Error),
 }
 
 // Re-export as Error for convenience

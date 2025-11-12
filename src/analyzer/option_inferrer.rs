@@ -56,7 +56,7 @@ impl OptionInferrer {
         if cache.is_none() {
             // Load and parse YAML config
             let config_content = std::fs::read_to_string(config_path)?;
-            let config: OptionPatternsConfig = serde_yml::from_str(&config_content)?;
+            let config: OptionPatternsConfig = serde_yaml::from_str(&config_content)?;
             *cache = Some(config);
         }
 
