@@ -2,6 +2,11 @@
 
 **Languages**: [English](README.md) | [日本語](README.ja.md)
 
+[![Crates.io](https://img.shields.io/crates/v/cli-testing-specialist)](https://crates.io/crates/cli-testing-specialist)
+[![Downloads](https://img.shields.io/crates/d/cli-testing-specialist)](https://crates.io/crates/cli-testing-specialist)
+[![License: MIT](https://img.shields.io/crates/l/cli-testing-specialist)](LICENSE)
+[![Docs.rs](https://docs.rs/cli-testing-specialist/badge.svg)](https://docs.rs/cli-testing-specialist)
+
 **Version**: 1.0.9
 **Last Updated**: 2025-11-12
 **Status**: Production Ready
@@ -72,7 +77,17 @@ open curl-reports/curl-tests-report.html  # macOS
 
 ## Installation
 
-### From Source (Recommended)
+### From Crates.io (Recommended)
+
+```bash
+# Install from crates.io
+cargo install cli-testing-specialist
+
+# Verify installation
+cli-testing-specialist --version
+```
+
+### From Source
 
 ```bash
 # Install from GitHub
@@ -80,12 +95,6 @@ cargo install --git https://github.com/sanae-abe/cli-testing-specialist
 
 # Verify installation
 cli-testing-specialist --version
-```
-
-### From Crates.io (Coming Soon)
-
-```bash
-cargo install cli-testing-specialist
 ```
 
 ### Dependencies
