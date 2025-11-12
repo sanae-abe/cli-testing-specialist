@@ -64,7 +64,7 @@ tempfile = "3.8"
 proptest = "1.4"
 
 # Benchmarking
-criterion = "0.5"
+criterion = "0.7"
 
 [profile.release]
 lto = "thin"

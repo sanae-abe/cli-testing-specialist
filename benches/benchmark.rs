@@ -1,7 +1,8 @@
 use cli_testing_specialist::analyzer::CliParser;
 use cli_testing_specialist::generator::TestGenerator;
 use cli_testing_specialist::types::{TestCase, TestCategory};
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use std::hint::black_box;
 use std::path::Path;
 use std::time::Duration;
 
