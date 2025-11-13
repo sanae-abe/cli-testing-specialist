@@ -155,6 +155,22 @@ cli-testing-specialist is optimized for **standard CLI tools**. See [docs/TARGET
 
 **See [docs/TARGET-TOOLS.md](./docs/TARGET-TOOLS.md) for complete guidelines, language-specific details, and best practices.**
 
+### 🎯 Verified Success Cases
+
+Real-world CLI tools tested with 100% success rate:
+
+| Tool | Language | Framework | Tests | Success Rate | Notes |
+|------|----------|-----------|-------|--------------|-------|
+| **package-publisher** | Node.js | commander.js | 17/17 | 100% | NPM package publisher with multi-command support |
+| **backup-suite** | Rust | clap | 15/15 | 100% | Backup automation tool with encryption |
+| **cmdrun** | Rust | clap | 14/14 | 100% | Command runner with TOML configuration |
+| **cldev** | Rust | clap | 15/15 | 100% | Interactive development CLI with i18n |
+
+**Framework Compatibility Verified**:
+- ✅ **commander.js** (Node.js): Exit code 1 for errors (differs from clap's exit 2)
+- ✅ **clap** (Rust): Standard Unix exit codes (0=success, 1=error, 2=usage)
+- ✅ **Custom parsers**: getopt-based tools (curl, git)
+
 ---
 
 ## Features

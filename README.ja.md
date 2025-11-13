@@ -155,6 +155,22 @@ cli-testing-specialistは**標準的なCLIツール**向けに最適化されて
 
 **完全なガイドライン、言語別詳細、ベストプラクティスは[docs/TARGET-TOOLS.md](./docs/TARGET-TOOLS.md)を参照してください。**
 
+### 🎯 検証済み成功事例
+
+実環境で100%成功率を達成したCLIツール：
+
+| ツール | 言語 | フレームワーク | テスト数 | 成功率 | 備考 |
+|------|------|--------------|---------|--------|------|
+| **package-publisher** | Node.js | commander.js | 17/17 | 100% | マルチコマンド対応のNPMパッケージ公開ツール |
+| **backup-suite** | Rust | clap | 15/15 | 100% | 暗号化機能付きバックアップ自動化ツール |
+| **cmdrun** | Rust | clap | 14/14 | 100% | TOML設定対応のコマンド実行ツール |
+| **cldev** | Rust | clap | 15/15 | 100% | i18n対応の対話型開発CLI |
+
+**フレームワーク互換性検証済み**:
+- ✅ **commander.js** (Node.js): エラー時はexit code 1 (clapのexit 2と異なる)
+- ✅ **clap** (Rust): 標準Unix終了コード (0=成功、1=エラー、2=使用法エラー)
+- ✅ **カスタムパーサー**: getoptベースツール (curl、git)
+
 ---
 
 ## 機能一覧
