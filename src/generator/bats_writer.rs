@@ -221,12 +221,22 @@ impl BatsWriter {
                 writeln!(writer, "    [ \"$status\" -eq {} ]", code)?;
             }
             Assertion::OutputContains(text) => {
-                writeln!(
-                    writer,
-                    "    [[ \"$output\" =~ \"{}\" ]] || [[ \"$stderr\" =~ \"{}\" ]]",
-                    escape_regex(text),
-                    escape_regex(text)
-                )?;
+                // Special case for "Usage:" - support both uppercase and lowercase
+                // Python argparse uses "usage:" (lowercase)
+                // Most other CLIs use "Usage:" (uppercase)
+                if text == "Usage:" {
+                    writeln!(
+                        writer,
+                        "    [[ \"$output\" =~ \"Usage:\" ]] || [[ \"$output\" =~ \"usage:\" ]] || [[ \"$stderr\" =~ \"Usage:\" ]] || [[ \"$stderr\" =~ \"usage:\" ]]"
+                    )?;
+                } else {
+                    writeln!(
+                        writer,
+                        "    [[ \"$output\" =~ \"{}\" ]] || [[ \"$stderr\" =~ \"{}\" ]]",
+                        escape_regex(text),
+                        escape_regex(text)
+                    )?;
+                }
             }
             Assertion::OutputMatches(pattern) => {
                 writeln!(
