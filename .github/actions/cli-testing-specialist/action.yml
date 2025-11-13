@@ -1,0 +1,186 @@
+name: 'CLI Testing Specialist'
+description: 'Automated CLI testing with comprehensive security validation and report generation'
+author: 'sanae-abe'
+
+branding:
+  icon: 'check-circle'
+  color: 'green'
+
+inputs:
+  binary:
+    description: 'Path to CLI binary to test'
+    required: true
+  categories:
+    description: 'Test categories (all, basic, security, help, path, etc.)'
+    required: false
+    default: 'all'
+  format:
+    description: 'Report format (all, markdown, json, html, junit)'
+    required: false
+    default: 'all'
+  output:
+    description: 'Output directory for test reports'
+    required: false
+    default: 'cli-test-reports'
+  include-intensive:
+    description: 'Include resource-intensive tests (directory-traversal)'
+    required: false
+    default: 'false'
+  version:
+    description: 'cli-testing-specialist version to install'
+    required: false
+    default: '1.1.0'
+
+outputs:
+  report-path:
+    description: 'Path to generated test reports'
+    value: ${{ steps.run-tests.outputs.report-path }}
+  tests-passed:
+    description: 'Number of tests passed'
+    value: ${{ steps.parse-results.outputs.passed }}
+  tests-failed:
+    description: 'Number of tests failed'
+    value: ${{ steps.parse-results.outputs.failed }}
+  tests-total:
+    description: 'Total number of tests'
+    value: ${{ steps.parse-results.outputs.total }}
+
+runs:
+  using: 'composite'
+  steps:
+    # Security: Mask sensitive paths
+    - name: Mask sensitive values
+      shell: bash
+      run: |
+        echo "::add-mask::${{ inputs.binary }}"
+        echo "::add-mask::$(pwd)"
+        echo "::add-mask::$HOME"
+
+    # Install bats (required for test execution)
+    - name: Install bats
+      shell: bash
+      run: |
+        if command -v bats &> /dev/null; then
+          echo "bats already installed: $(bats --version)"
+        else
+          echo "Installing bats..."
+          sudo apt-get update -qq
+          sudo apt-get install -y bats
+          echo "Installed bats: $(bats --version)"
+        fi
+
+    # Install cli-testing-specialist using taiki-e/install-action (fast binary cache)
+    - name: Install cli-testing-specialist
+      uses: taiki-e/install-action@v2
+      with:
+        tool: cli-testing-specialist@${{ inputs.version }}
+
+    # Verify installation
+    - name: Verify installation
+      shell: bash
+      run: |
+        cli-testing-specialist --version
+        echo "✅ cli-testing-specialist installed successfully"
+
+    # Analyze CLI tool
+    - name: Analyze CLI
+      shell: bash
+      run: |
+        echo "Analyzing CLI: ${{ inputs.binary }}"
+        cli-testing-specialist analyze "${{ inputs.binary }}" -o analysis.json
+
+        # Display analysis summary
+        if command -v jq &> /dev/null; then
+          echo "📊 Analysis Summary:"
+          jq -r '.metadata | "Total subcommands: \(.total_subcommands)\nTotal options: \(.total_options)"' analysis.json
+        fi
+
+    # Generate tests
+    - name: Generate tests
+      shell: bash
+      run: |
+        GENERATE_CMD="cli-testing-specialist generate analysis.json -o tests -c ${{ inputs.categories }}"
+
+        if [ "${{ inputs.include-intensive }}" = "true" ]; then
+          GENERATE_CMD="$GENERATE_CMD --include-intensive"
+          echo "⚠️  Including resource-intensive tests"
+        fi
+
+        echo "Generating tests: $GENERATE_CMD"
+        $GENERATE_CMD
+
+        echo "✅ Tests generated in ./tests directory"
+        ls -lh tests/*.bats || echo "No test files generated"
+
+    # Run tests
+    - name: Run tests
+      id: run-tests
+      shell: bash
+      run: |
+        echo "Running tests with format: ${{ inputs.format }}"
+        cli-testing-specialist run tests -f ${{ inputs.format }} -o ${{ inputs.output }}
+
+        echo "report-path=${{ inputs.output }}" >> $GITHUB_OUTPUT
+        echo "✅ Test execution completed"
+
+    # Parse test results (from JSON report)
+    - name: Parse test results
+      id: parse-results
+      shell: bash
+      run: |
+        JSON_REPORT="${{ inputs.output }}/tests-report.json"
+
+        if [ ! -f "$JSON_REPORT" ]; then
+          echo "⚠️  JSON report not found, skipping result parsing"
+          echo "passed=0" >> $GITHUB_OUTPUT
+          echo "failed=0" >> $GITHUB_OUTPUT
+          echo "total=0" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        if command -v jq &> /dev/null; then
+          PASSED=$(jq '[.suites[].tests[] | select(.status == "passed")] | length' "$JSON_REPORT")
+          FAILED=$(jq '[.suites[].tests[] | select(.status == "failed")] | length' "$JSON_REPORT")
+          TOTAL=$(jq '[.suites[].tests[]] | length' "$JSON_REPORT")
+
+          echo "passed=$PASSED" >> $GITHUB_OUTPUT
+          echo "failed=$FAILED" >> $GITHUB_OUTPUT
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+
+          echo "📊 Test Results: $PASSED passed, $FAILED failed, $TOTAL total"
+        else
+          echo "⚠️  jq not available, skipping detailed result parsing"
+          echo "passed=0" >> $GITHUB_OUTPUT
+          echo "failed=0" >> $GITHUB_OUTPUT
+          echo "total=0" >> $GITHUB_OUTPUT
+        fi
+
+    # Display summary
+    - name: Display test summary
+      shell: bash
+      run: |
+        echo "## 📋 CLI Testing Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Binary**: \`${{ inputs.binary }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Categories**: \`${{ inputs.categories }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Format**: \`${{ inputs.format }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Reports**: \`${{ inputs.output }}/\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ -f "${{ inputs.output }}/tests-report.json" ] && command -v jq &> /dev/null; then
+          PASSED=$(jq '[.suites[].tests[] | select(.status == "passed")] | length' "${{ inputs.output }}/tests-report.json")
+          FAILED=$(jq '[.suites[].tests[] | select(.status == "failed")] | length' "${{ inputs.output }}/tests-report.json")
+          TOTAL=$(jq '[.suites[].tests[]] | length' "${{ inputs.output }}/tests-report.json")
+          SUCCESS_RATE=$(echo "scale=1; $PASSED * 100 / $TOTAL" | bc)
+
+          echo "### 📊 Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ **Passed**: $PASSED" >> $GITHUB_STEP_SUMMARY
+          echo "- ❌ **Failed**: $FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "- 📈 **Success Rate**: ${SUCCESS_RATE}%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f "${{ inputs.output }}/tests-report.html" ]; then
+            echo "📄 [View HTML Report](${{ inputs.output }}/tests-report.html)" >> $GITHUB_STEP_SUMMARY
+          fi
+        fi

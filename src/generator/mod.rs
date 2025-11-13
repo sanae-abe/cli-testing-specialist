@@ -51,11 +51,15 @@
 //!
 //! Templates are validated at compile time for correctness.
 
+pub mod assert_cmd_generator;
 pub mod bats_writer;
 pub mod templates;
 pub mod test_generator;
+pub mod test_generator_trait;
 
 // Re-export commonly used types
+pub use assert_cmd_generator::AssertCmdGenerator;
 pub use bats_writer::BatsWriter;
 pub use templates::TemplateEngine;
 pub use test_generator::TestGenerator;
+pub use test_generator_trait::TestGenerator as TestGeneratorTrait;

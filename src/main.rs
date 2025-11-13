@@ -1,9 +1,11 @@
 use clap::{CommandFactory, Parser};
 use clap_complete::{generate, Shell};
 use cli_testing_specialist::analyzer::CliParser;
-use cli_testing_specialist::cli::{Cli, Commands, ReportFormat};
+use cli_testing_specialist::cli::{Cli, Commands, ReportFormat, TestFormat};
 use cli_testing_specialist::error::Result;
-use cli_testing_specialist::generator::{BatsWriter, TestGenerator};
+use cli_testing_specialist::generator::{
+    AssertCmdGenerator, BatsWriter, TestGenerator, TestGeneratorTrait,
+};
 use cli_testing_specialist::reporter::{
     HtmlReporter, JsonReporter, JunitReporter, MarkdownReporter,
 };
@@ -78,6 +80,7 @@ fn main() -> Result<()> {
             analysis,
             output,
             categories,
+            format,
             include_intensive,
         } => {
             log::info!("Generating tests from: {}", analysis.display());
@@ -103,48 +106,100 @@ fn main() -> Result<()> {
                 );
             }
 
-            // 3. Generate test cases
-            let generator = TestGenerator::new(cli_analysis.clone(), selected_categories);
-            let test_cases = if num_categories > 1 {
-                // Use parallel generation for multiple categories
-                log::info!("Using parallel test generation");
-                generator.generate_parallel()?
-            } else {
-                generator.generate()?
-            };
+            match format {
+                TestFormat::Bats => {
+                    // 3. Generate test cases (BATS)
+                    let generator = TestGenerator::new(cli_analysis.clone(), selected_categories);
+                    let test_cases = if num_categories > 1 {
+                        // Use parallel generation for multiple categories
+                        log::info!("Using parallel test generation");
+                        generator.generate_parallel()?
+                    } else {
+                        generator.generate()?
+                    };
 
-            log::info!("Generated {} test cases", test_cases.len());
+                    log::info!("Generated {} test cases", test_cases.len());
 
-            // 4. Write BATS files
-            let writer = BatsWriter::new(
-                output.clone(),
-                cli_analysis.binary_name.clone(),
-                cli_analysis.binary_path.clone(),
-            )?;
+                    // 4. Write BATS files
+                    let writer = BatsWriter::new(
+                        output.clone(),
+                        cli_analysis.binary_name.clone(),
+                        cli_analysis.binary_path.clone(),
+                    )?;
 
-            let output_files = writer.write_tests(&test_cases)?;
+                    let output_files = writer.write_tests(&test_cases)?;
 
-            // 5. Validate generated files
-            for file in &output_files {
-                writer.validate_bats_file(file)?;
-                log::debug!("Validated: {}", file.display());
+                    // 5. Validate generated files
+                    for file in &output_files {
+                        writer.validate_bats_file(file)?;
+                        log::debug!("Validated: {}", file.display());
+                    }
+
+                    // 6. Success message
+                    println!("✓ Test generation complete: {} files", output_files.len());
+                    println!("  Output directory: {}", output.display());
+                    println!("  Total test cases: {}", test_cases.len());
+                    println!("\nGenerated files:");
+                    for file in &output_files {
+                        let file_name = file.file_name().unwrap().to_string_lossy();
+                        let test_count = test_cases
+                            .iter()
+                            .filter(|t| file_name.starts_with(t.category.as_str()))
+                            .count();
+                        println!("  - {} ({} tests)", file_name, test_count);
+                    }
+
+                    println!("\nRun tests with: bats {}", output.display());
+                }
+
+                TestFormat::AssertCmd => {
+                    // 3. Generate assert_cmd tests
+                    log::info!("Generating assert_cmd Rust tests");
+                    let generator = AssertCmdGenerator::new(&cli_analysis)?;
+
+                    // Create output directory
+                    fs::create_dir_all(&output)?;
+
+                    // Generate tests for each category
+                    let mut output_files = Vec::new();
+                    for category in &selected_categories {
+                        let test_code = generator.generate(&cli_analysis, *category)?;
+                        let file_name = format!("{}.rs", category.as_str());
+                        let file_path = output.join(&file_name);
+
+                        fs::write(&file_path, test_code)?;
+                        output_files.push(file_path);
+                        log::info!("Generated: {}", file_name);
+                    }
+
+                    // 4. Success message
+                    println!("✓ assert_cmd test generation complete: {} files", output_files.len());
+                    println!("  Output directory: {}", output.display());
+                    println!("  Format: Rust (assert_cmd)");
+                    println!("\nGenerated files:");
+                    for file in &output_files {
+                        let file_name = file.file_name().unwrap().to_string_lossy();
+                        println!("  - {}", file_name);
+                    }
+
+                    println!("\nNext steps:");
+                    println!("  1. Add to your Cargo.toml:");
+                    println!("     [dev-dependencies]");
+                    println!("     assert_cmd = \"2.0\"");
+                    println!("     predicates = \"3.0\"");
+                    println!("     tempfile = \"3.0\"");
+                    println!("\n  2. Copy generated tests to tests/ directory:");
+                    println!("     cp {}/*.rs tests/", output.display());
+                    println!("\n  3. Run tests:");
+                    println!("     cargo test");
+                }
+
+                TestFormat::Snapbox => {
+                    return Err(cli_testing_specialist::error::Error::InvalidFormat(
+                        "snapbox format not yet implemented".to_string(),
+                    ));
+                }
             }
-
-            // 6. Success message
-            println!("✓ Test generation complete: {} files", output_files.len());
-            println!("  Output directory: {}", output.display());
-            println!("  Total test cases: {}", test_cases.len());
-            println!("\nGenerated files:");
-            for file in &output_files {
-                let file_name = file.file_name().unwrap().to_string_lossy();
-                let test_count = test_cases
-                    .iter()
-                    .filter(|t| file_name.starts_with(t.category.as_str()))
-                    .count();
-                println!("  - {} ({} tests)", file_name, test_count);
-            }
-
-            println!("\nRun tests with: bats {}", output.display());
 
             Ok(())
         }

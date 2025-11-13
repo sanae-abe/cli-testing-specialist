@@ -125,7 +125,11 @@ impl TestGenerator {
         }
 
         // Test 4: Invalid option
-        // Note: clap returns exit code 2 for invalid options (Unix standard)
+        // Note: Different CLI frameworks use different exit codes for invalid options:
+        // - Rust (clap): exit code 2 (Unix standard for usage errors)
+        // - Node.js (commander.js): exit code 1
+        // - Python (argparse): exit code 2
+        // Accept any non-zero exit code to support all frameworks
         tests.push(
             TestCase::new(
                 "basic-004".to_string(),
@@ -133,7 +137,7 @@ impl TestGenerator {
                 TestCategory::Basic,
                 "\"$CLI_BINARY\" --invalid-option-xyz".to_string(),
             )
-            .with_exit_code(2) // clap standard: 2 for usage errors
+            .expect_nonzero_exit() // Accept exit 1 or 2 (framework-agnostic)
             .with_assertion(Assertion::OutputContains("error".to_string()))
             .with_tag("error-handling".to_string()),
         );
@@ -301,19 +305,25 @@ impl TestGenerator {
         );
 
         // Test 4: Long input (buffer overflow test)
-        // This is informational - tool may succeed if input is properly sanitized
+        // This is informational - tool may succeed if input is properly sanitized, or reject it
+        // Different behaviors are acceptable:
+        // - Exit 0: Tool accepted and sanitized the input (Node.js may truncate)
+        // - Exit 1: Tool rejected as DoS protection (recommended for security)
+        // - Exit 2: Tool rejected as invalid input
+        // No specific exit code is required - this test verifies the tool doesn't crash
         let long_input = "A".repeat(10000);
         tests.push(
             TestCase::new(
                 "security-004".to_string(),
-                "Handle extremely long input".to_string(),
+                "Handle extremely long input without crashing".to_string(),
                 TestCategory::Security,
                 format!("\"$CLI_BINARY\" {} '{}'", string_option, long_input),
             )
-            // No exit code expectation - this is informational
-            // Tool may succeed (0) if properly sanitized, or fail (1) if rejected
+            // No exit code expectation - any exit code is acceptable (0, 1, or 2)
+            // This test only verifies the tool doesn't crash or hang
             .with_priority(TestPriority::Important) // Informational test
             .with_tag("buffer-overflow".to_string())
+            .with_tag("dos-protection".to_string())
             .with_tag("informational".to_string()),
         );
 
@@ -560,10 +570,8 @@ impl TestGenerator {
 
     /// Generate directory traversal tests
     fn generate_directory_traversal_tests(&self) -> Result<Vec<TestCase>> {
-        let mut tests = Vec::new();
-
-        // Test 1: Large directory (1000 files)
-        tests.push(
+        let tests = vec![
+            // Test 1: Large directory (1000 files)
             TestCase::new(
                 "dir-traversal-001".to_string(),
                 "Handle directory with 1000 files".to_string(),
@@ -572,10 +580,7 @@ impl TestGenerator {
             )
             .with_tag("performance".to_string())
             .with_tag("large-dir".to_string()),
-        );
-
-        // Test 2: Deep directory nesting (50 levels)
-        tests.push(
+            // Test 2: Deep directory nesting (50 levels)
             TestCase::new(
                 "dir-traversal-002".to_string(),
                 "Handle deeply nested directory (50 levels)".to_string(),
@@ -584,10 +589,7 @@ impl TestGenerator {
             )
             .with_tag("performance".to_string())
             .with_tag("deep-nesting".to_string()),
-        );
-
-        // Test 3: Symlink loops
-        tests.push(
+            // Test 3: Symlink loops
             TestCase::new(
                 "dir-traversal-003".to_string(),
                 "Detect and handle symlink loops".to_string(),
@@ -596,17 +598,15 @@ impl TestGenerator {
             )
             .with_tag("symlink".to_string())
             .with_tag("loop-detection".to_string()),
-        );
+        ];
 
         Ok(tests)
     }
 
     /// Generate performance tests
     fn generate_performance_tests(&self) -> Result<Vec<TestCase>> {
-        let mut tests = Vec::new();
-
-        // Test 1: Startup time (help should be fast)
-        tests.push(
+        let tests = vec![
+            // Test 1: Startup time (help should be fast)
             TestCase::new(
                 "perf-001".to_string(),
                 "Startup time for --help < 100ms".to_string(),
@@ -616,10 +616,7 @@ impl TestGenerator {
             .with_exit_code(0)
             .with_tag("startup".to_string())
             .with_tag("benchmark".to_string()),
-        );
-
-        // Test 2: Memory usage
-        tests.push(
+            // Test 2: Memory usage
             TestCase::new(
                 "perf-002".to_string(),
                 "Memory usage stays within reasonable limits".to_string(),
@@ -629,7 +626,7 @@ impl TestGenerator {
             .with_exit_code(0)
             .with_tag("memory".to_string())
             .with_tag("benchmark".to_string()),
-        );
+        ];
 
         Ok(tests)
     }
@@ -639,13 +636,14 @@ impl TestGenerator {
         let mut tests = Vec::new();
 
         // Test basic command in different shells (bash, zsh, sh)
+        // Note: Use double quotes to allow variable expansion, escape inner quotes
         for shell in &["bash", "zsh", "sh"] {
             tests.push(
                 TestCase::new(
                     format!("multi-shell-{}", shell),
                     format!("Run --help in {}", shell),
                     TestCategory::MultiShell,
-                    format!("{} -c '\"$CLI_BINARY\" --help'", shell),
+                    format!("{} -c \"\\\"$CLI_BINARY\\\" --help\"", shell),
                 )
                 .with_exit_code(0)
                 .with_tag(shell.to_string()),

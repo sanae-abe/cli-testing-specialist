@@ -243,7 +243,56 @@ For details, see [`docs/REPORT-FORMATS.md`](docs/REPORT-FORMATS.md).
 
 ## CI/CD Integration
 
-### GitHub Actions
+### GitHub Actions (Recommended - 3 lines!)
+
+**New in v1.1.0**: Use the official GitHub Action for the easiest integration:
+
+```yaml
+name: CLI Testing
+
+on: [push, pull_request]
+
+jobs:
+  cli-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build your CLI
+        run: cargo build --release
+
+      - name: Test CLI
+        uses: ./.github/actions/cli-testing-specialist
+        with:
+          binary: ./target/release/your-cli
+          categories: all
+          format: all
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-test-reports
+          path: cli-test-reports/
+```
+
+**Advanced Configuration**:
+
+```yaml
+      - name: Test CLI with custom settings
+        uses: ./.github/actions/cli-testing-specialist
+        with:
+          binary: ./target/release/your-cli
+          categories: 'basic,security,path'  # Specific categories
+          format: 'junit'                    # CI-friendly format
+          output: 'test-results'             # Custom output directory
+          include-intensive: 'false'         # Skip resource-intensive tests
+          version: '1.1.0'                   # Specific version
+```
+
+### GitHub Actions (Manual Setup)
+
+If you prefer manual setup:
 
 ```yaml
 name: CLI Testing

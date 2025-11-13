@@ -243,7 +243,56 @@ cli-testing-specialist run ./tests -f all -o ./reports
 
 ## CI/CD統合
 
-### GitHub Actions
+### GitHub Actions（推奨 - たった3行！）
+
+**v1.1.0の新機能**: 公式GitHub Actionで最も簡単に統合できます：
+
+```yaml
+name: CLI Testing
+
+on: [push, pull_request]
+
+jobs:
+  cli-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: CLIをビルド
+        run: cargo build --release
+
+      - name: CLIをテスト
+        uses: ./.github/actions/cli-testing-specialist
+        with:
+          binary: ./target/release/your-cli
+          categories: all
+          format: all
+
+      - name: テストレポートをアップロード
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-test-reports
+          path: cli-test-reports/
+```
+
+**高度な設定**:
+
+```yaml
+      - name: カスタム設定でCLIをテスト
+        uses: ./.github/actions/cli-testing-specialist
+        with:
+          binary: ./target/release/your-cli
+          categories: 'basic,security,path'  # 特定のカテゴリのみ
+          format: 'junit'                    # CI向けフォーマット
+          output: 'test-results'             # カスタム出力ディレクトリ
+          include-intensive: 'false'         # リソース集約的テストをスキップ
+          version: '1.1.0'                   # 特定バージョン
+```
+
+### GitHub Actions（手動セットアップ）
+
+手動セットアップがお好みの場合：
 
 ```yaml
 name: CLI Testing

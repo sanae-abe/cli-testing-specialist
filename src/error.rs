@@ -48,6 +48,10 @@ pub enum CliTestError {
     #[error("Validation error: {0}")]
     Validation(String),
 
+    /// Invalid format specified
+    #[error("Invalid format: {0}")]
+    InvalidFormat(String),
+
     /// I/O error occurred
     #[error(transparent)]
     IoError(#[from] std::io::Error),
@@ -59,6 +63,14 @@ pub enum CliTestError {
     /// YAML serialization/deserialization error
     #[error(transparent)]
     Yaml(#[from] serde_yaml::Error),
+
+    /// Handlebars template error
+    #[error(transparent)]
+    HandlebarsTemplate(#[from] handlebars::TemplateError),
+
+    /// Handlebars render error
+    #[error(transparent)]
+    HandlebarsRender(#[from] handlebars::RenderError),
 }
 
 // Re-export as Error for convenience
@@ -101,6 +113,9 @@ impl CliTestError {
             Self::Validation(msg) => {
                 format!("Validation error: {}", msg)
             }
+            Self::InvalidFormat(msg) => {
+                format!("Invalid format: {}", msg)
+            }
             Self::IoError(e) => {
                 format!("I/O error: {}", e)
             }
@@ -109,6 +124,12 @@ impl CliTestError {
             }
             Self::Yaml(e) => {
                 format!("YAML error: {}", e)
+            }
+            Self::HandlebarsTemplate(e) => {
+                format!("Handlebars template error: {}", e)
+            }
+            Self::HandlebarsRender(e) => {
+                format!("Handlebars render error: {}", e)
             }
         }
     }
@@ -209,6 +230,15 @@ impl CliTestError {
                     "Ensure all required parameters are provided".white()
                 )
             }
+            Self::InvalidFormat(msg) => {
+                format!(
+                    "{} {}\n{} {}",
+                    "Error:".red().bold(),
+                    format!("Invalid format: {}", msg).white(),
+                    "Suggestion:".yellow().bold(),
+                    "Use a supported format (bats, assert_cmd, snapbox)".white()
+                )
+            }
             Self::IoError(e) => {
                 format!(
                     "{} {}\n{} {}",
@@ -234,6 +264,24 @@ impl CliTestError {
                     format!("YAML error: {}", e).white(),
                     "Suggestion:".yellow().bold(),
                     "Check YAML indentation and syntax".white()
+                )
+            }
+            Self::HandlebarsTemplate(e) => {
+                format!(
+                    "{} {}\n{} {}",
+                    "Error:".red().bold(),
+                    format!("Template syntax error: {}", e).white(),
+                    "Suggestion:".yellow().bold(),
+                    "Check Handlebars template syntax and variable names".white()
+                )
+            }
+            Self::HandlebarsRender(e) => {
+                format!(
+                    "{} {}\n{} {}",
+                    "Error:".red().bold(),
+                    format!("Template rendering error: {}", e).white(),
+                    "Suggestion:".yellow().bold(),
+                    "Verify template data and variable bindings".white()
                 )
             }
         }

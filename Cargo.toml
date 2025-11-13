@@ -53,6 +53,9 @@ hostname = "0.4"
 # Process timeout
 wait-timeout = "0.2"
 
+# Template engine (for assert_cmd code generation)
+handlebars = "5.1"
+
 # Unix system calls (for resource limits)
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

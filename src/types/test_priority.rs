@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 /// - Success rate calculation (SecurityCheck failures don't lower template quality)
 /// - Report presentation (SecurityCheck failures shown as security findings)
 /// - Filtering and categorization
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum TestPriority {
     /// Critical test - must pass for production use
@@ -26,6 +26,7 @@ pub enum TestPriority {
     /// - Optional functionality
     ///
     /// **Failure impact**: Suggests improvement areas but not critical
+    #[default]
     Important,
 
     /// Security vulnerability check - failure indicates target tool issue
@@ -78,11 +79,6 @@ impl TestPriority {
     }
 }
 
-impl Default for TestPriority {
-    fn default() -> Self {
-        Self::Important
-    }
-}
 
 #[cfg(test)]
 mod tests {

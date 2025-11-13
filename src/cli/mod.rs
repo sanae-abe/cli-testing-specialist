@@ -1,3 +1,3 @@
 pub mod commands;
 
-pub use commands::{Cli, Commands, ReportFormat};
+pub use commands::{Cli, Commands, ReportFormat, TestFormat};

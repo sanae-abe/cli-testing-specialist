@@ -31,6 +31,7 @@ lazy_static! {
         "Available subcommands:",
         "COMMANDS:",
         "SUBCOMMANDS:",
+        "positional arguments:",  // Python argparse
     ];
 }
 
@@ -376,5 +377,33 @@ Commands:
 
         let detector_default = SubcommandDetector::default();
         assert_eq!(detector_default.max_depth, MAX_RECURSION_DEPTH);
+    }
+
+    #[test]
+    fn test_parse_subcommands_python_argparse() {
+        let detector = SubcommandDetector::default();
+        let help_output = r#"
+usage: tool.py [-h] [--version] command ...
+
+positional arguments:
+  command
+    init      Initialize project
+    build     Build project
+    test      Run tests
+
+optional arguments:
+  -h, --help  show this help message and exit
+"#;
+
+        let subcommands = detector.parse_subcommands(help_output);
+
+        assert_eq!(subcommands.len(), 3);
+        assert!(subcommands.iter().any(|(name, _)| name == "init"));
+        assert!(subcommands.iter().any(|(name, _)| name == "build"));
+        assert!(subcommands.iter().any(|(name, _)| name == "test"));
+
+        let init_cmd = subcommands.iter().find(|(name, _)| name == "init");
+        assert!(init_cmd.is_some());
+        assert_eq!(init_cmd.unwrap().1, "Initialize project");
     }
 }

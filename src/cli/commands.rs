@@ -44,7 +44,7 @@ pub enum Commands {
     },
 
     /// Generate test cases from analysis results
-    #[command(about = "Generate BATS test suites from analysis")]
+    #[command(about = "Generate test suites from analysis (BATS, assert_cmd, or snapbox)")]
     Generate {
         /// Analysis JSON file path
         #[arg(value_name = "ANALYSIS")]
@@ -57,6 +57,10 @@ pub enum Commands {
         /// Test categories to generate (comma-separated or "all")
         #[arg(short, long, default_value = "all")]
         categories: String,
+
+        /// Test framework format (bats, assert_cmd, snapbox)
+        #[arg(short, long, default_value = "bats")]
+        format: TestFormat,
 
         /// Include resource-intensive tests (directory-traversal, large-scale performance)
         /// These tests may require significant /tmp space and memory
@@ -133,6 +137,40 @@ impl ReportFormat {
             Self::Html => "html",
             Self::Junit => "xml",
             Self::All => "all",
+        }
+    }
+}
+
+/// Test framework format
+#[derive(ValueEnum, Clone, Debug)]
+pub enum TestFormat {
+    /// BATS (Bash Automated Testing System)
+    Bats,
+
+    /// assert_cmd (Rust testing framework)
+    #[value(name = "assert_cmd")]
+    AssertCmd,
+
+    /// snapbox (Rust snapshot testing)
+    Snapbox,
+}
+
+impl TestFormat {
+    /// Get file extension for this format
+    pub fn extension(&self) -> &'static str {
+        match self {
+            Self::Bats => "bats",
+            Self::AssertCmd => "rs",
+            Self::Snapbox => "rs",
+        }
+    }
+
+    /// Get format name as string
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Bats => "bats",
+            Self::AssertCmd => "assert_cmd",
+            Self::Snapbox => "snapbox",
         }
     }
 }
