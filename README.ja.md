@@ -145,10 +145,11 @@ cli-testing-specialistは**標準的なCLIツール**向けに最適化されて
 - C/C++ (getopt、カスタムパーサー) - curl、git
 - Rust (clap) - backup-suite、cmdrun、cldev
 - Node.js (commander) - package-publisher
+- **Python (argparse)** - test_argparse.py (16/16テスト、100%)
 
 **⚠️ 未テスト（推定70-80%互換）**:
 - **Go** (cobra、urfave/cli) - gh、kubectl、docker
-- **Python** (argparse対応必要、click/typerは動作見込み)
+- **Python** (click、typer) - 互換性見込み、未テスト
 - **Ruby** (thor、gli)
 
 **📋 テスト予定**: v1.1.0以降

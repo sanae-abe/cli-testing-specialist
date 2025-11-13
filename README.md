@@ -145,10 +145,11 @@ cli-testing-specialist is optimized for **standard CLI tools**. See [docs/TARGET
 - C/C++ (getopt, custom parsers) - curl, git
 - Rust (clap) - backup-suite, cmdrun, cldev
 - Node.js (commander) - package-publisher
+- **Python (argparse)** - test_argparse.py (16/16 tests, 100%)
 
 **⚠️ Untested (Estimated 70-80% compatible)**:
 - **Go** (cobra, urfave/cli) - gh, kubectl, docker
-- **Python** (argparse requires fix, click/typer likely work)
+- **Python** (click, typer) - Likely compatible, untested
 - **Ruby** (thor, gli)
 
 **📋 Planned Testing**: v1.1.0+
