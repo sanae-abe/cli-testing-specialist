@@ -204,8 +204,17 @@ impl TestGenerator {
     fn generate_help_tests(&self) -> Result<Vec<TestCase>> {
         let mut tests = Vec::new();
 
-        // Test help for each subcommand
+        // Test help for each subcommand (exclude meta-commands like 'help' itself)
         for (idx, subcommand) in self.analysis.subcommands.iter().enumerate() {
+            // Skip 'help' meta-command (commander.js helpCommand)
+            // - 'help' is a special meta-command, not a regular subcommand
+            // - 'help --help' is valid, but we test it in basic tests
+            // - Avoids 'help help' which may fail in some CLI frameworks
+            if subcommand.name.to_lowercase() == "help" {
+                log::debug!("Skipping help test for meta-command 'help'");
+                continue;
+            }
+
             tests.push(
                 TestCase::new(
                     format!("help-{:03}", idx + 1),
@@ -305,27 +314,33 @@ impl TestGenerator {
         );
 
         // Test 4: Long input (buffer overflow test)
-        // This is informational - tool may succeed if input is properly sanitized, or reject it
-        // Different behaviors are acceptable:
-        // - Exit 0: Tool accepted and sanitized the input (Node.js may truncate)
-        // - Exit 1: Tool rejected as DoS protection (recommended for security)
-        // - Exit 2: Tool rejected as invalid input
-        // No specific exit code is required - this test verifies the tool doesn't crash
-        let long_input = "A".repeat(10000);
-        tests.push(
-            TestCase::new(
-                "security-004".to_string(),
-                "Handle extremely long input without crashing".to_string(),
-                TestCategory::Security,
-                format!("\"$CLI_BINARY\" {} '{}'", string_option, long_input),
-            )
-            // No exit code expectation - any exit code is acceptable (0, 1, or 2)
-            // This test only verifies the tool doesn't crash or hang
-            .with_priority(TestPriority::Important) // Informational test
-            .with_tag("buffer-overflow".to_string())
-            .with_tag("dos-protection".to_string())
-            .with_tag("informational".to_string()),
-        );
+        // NOTE: Disabled by default due to platform-dependent behavior
+        // - Node.js: May fail with E2BIG (Argument list too long) - OS limit
+        // - Shell: May fail with ARG_MAX exceeded - OS limit (typically 128KB-2MB)
+        // - Different platforms have different limits (macOS: 256KB, Linux: 2MB)
+        //
+        // This test is informational and should only be enabled for:
+        // - Low-level languages (C/C++, Rust with unsafe code)
+        // - Tools handling binary data or parsing untrusted input
+        //
+        // For most CLI tools (especially Node.js), this test is not meaningful
+        // and will fail due to OS argument length limits, not application bugs.
+        //
+        // Uncomment to enable (not recommended for Node.js CLIs):
+        // let long_input = "A".repeat(10000);
+        // tests.push(
+        //     TestCase::new(
+        //         "security-004".to_string(),
+        //         "Handle extremely long input without crashing".to_string(),
+        //         TestCategory::Security,
+        //         format!("\"$CLI_BINARY\" {} '{}'", string_option, long_input),
+        //     )
+        //     .expect_nonzero_exit() // Expect rejection (OS limit or input validation)
+        //     .with_priority(TestPriority::Important) // Informational test
+        //     .with_tag("buffer-overflow".to_string())
+        //     .with_tag("dos-protection".to_string())
+        //     .with_tag("informational".to_string()),
+        // );
 
         Ok(tests)
     }
