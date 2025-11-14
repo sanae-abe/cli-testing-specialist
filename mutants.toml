@@ -1,0 +1,41 @@
+# Mutation Testing Configuration for cli-testing-specialist
+# https://mutants.rs/
+
+# Exclude generated files, tests, and examples
+exclude_globs = [
+    "**/*test*.rs",
+    "**/tests/**",
+    "**/examples/**",
+    "target/**",
+]
+
+# Timeout settings (in seconds)
+# If a test takes longer than this, the mutant is considered "timed out"
+timeout = 300  # 5 minutes per mutant
+
+# Test command to run for each mutant
+# By default, cargo-mutants runs `cargo test` but we exclude integration tests
+test_tool = "cargo"
+test_args = ["test", "--lib", "--all-features"]
+
+# Minimum test time (in seconds) to consider a mutant "caught"
+# If tests pass too quickly, the mutant might not be properly tested
+minimum_test_time = 0.1
+
+# Output directory for mutation testing results
+output = "mutants-out"
+
+# Baseline test time multiplier
+# Mutants that take more than baseline * this value are considered "timeout"
+timeout_multiplier = 5.0
+
+# Additional options
+[options]
+# Show caught mutants in the output (not just missed/timeout)
+show_caught = true
+
+# Show times for each mutant
+show_times = true
+
+# Use cargo nextest if available (faster test execution)
+# nextest = true

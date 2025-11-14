@@ -103,11 +103,71 @@ impl ResourceLimits {
         Ok(())
     }
 
-    /// Apply resource limits (Windows stub)
+    /// Apply resource limits using Windows Job Objects
     ///
-    /// Windows does not support setrlimit. Job Objects could be used
-    /// but are significantly more complex. This is marked as future work.
-    #[cfg(not(unix))]
+    /// Windows uses Job Objects to enforce resource limits, which is more complex
+    /// than Unix setrlimit but provides similar functionality.
+    #[cfg(windows)]
+    pub fn apply(&self) -> Result<()> {
+        use windows::Win32::Foundation::{CloseHandle, HANDLE};
+        use windows::Win32::System::JobObjects::{
+            AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+            SetInformationJobObject, JOBOBJECT_BASIC_LIMIT_INFORMATION,
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_ACTIVE_PROCESS,
+            JOB_OBJECT_LIMIT_JOB_MEMORY, JOB_OBJECT_LIMIT_PROCESS_MEMORY,
+        };
+        use windows::Win32::System::Threading::GetCurrentProcess;
+
+        unsafe {
+            // Create a job object
+            let job = CreateJobObjectW(None, None).map_err(|e| {
+                CliTestError::ExecutionFailed(format!("Failed to create job object: {}", e))
+            })?;
+
+            // Set job limits
+            let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION {
+                BasicLimitInformation: JOBOBJECT_BASIC_LIMIT_INFORMATION {
+                    LimitFlags: JOB_OBJECT_LIMIT_ACTIVE_PROCESS
+                        | JOB_OBJECT_LIMIT_PROCESS_MEMORY
+                        | JOB_OBJECT_LIMIT_JOB_MEMORY,
+                    ActiveProcessLimit: self.max_processes as u32,
+                    ..Default::default()
+                },
+                ProcessMemoryLimit: self.max_memory_bytes as usize,
+                JobMemoryLimit: self.max_memory_bytes as usize,
+                ..Default::default()
+            };
+
+            // Apply limits to job object
+            SetInformationJobObject(
+                job,
+                JobObjectExtendedLimitInformation,
+                &mut limits as *mut _ as *mut _,
+                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            )
+            .map_err(|e| {
+                CloseHandle(job);
+                CliTestError::ExecutionFailed(format!("Failed to set job limits: {}", e))
+            })?;
+
+            // Assign current process to job
+            let current_process = GetCurrentProcess();
+            AssignProcessToJobObject(job, current_process).map_err(|e| {
+                CloseHandle(job);
+                CliTestError::ExecutionFailed(format!("Failed to assign process to job: {}", e))
+            })?;
+
+            // Note: We intentionally don't close the job handle here
+            // because it needs to remain valid for the lifetime of the process
+            // The OS will clean it up when the process exits
+            log::debug!("Resource limits applied via Job Object");
+        }
+
+        Ok(())
+    }
+
+    /// Apply resource limits (non-Unix, non-Windows platforms)
+    #[cfg(not(any(unix, windows)))]
     pub fn apply(&self) -> Result<()> {
         log::warn!("Resource limits not supported on this platform");
         Ok(())

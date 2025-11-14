@@ -1,10 +1,12 @@
 use crate::analyzer::BehaviorInferrer;
+use crate::config::load_config;
 use crate::error::Result;
 use crate::types::{
-    Assertion, CliAnalysis, CliOption, NoArgsBehavior, OptionType, TestCase, TestCategory,
-    TestPriority,
+    Assertion, CliAnalysis, CliOption, CliTestConfig, NoArgsBehavior, OptionType, TestCase,
+    TestCategory, TestPriority,
 };
 use rayon::prelude::*;
+use std::path::Path;
 
 /// Test generator for creating test cases from CLI analysis
 pub struct TestGenerator {
@@ -13,6 +15,9 @@ pub struct TestGenerator {
 
     /// Categories to generate tests for
     categories: Vec<TestCategory>,
+
+    /// Optional configuration for test adjustments
+    config: Option<CliTestConfig>,
 }
 
 impl TestGenerator {
@@ -21,7 +26,22 @@ impl TestGenerator {
         Self {
             analysis,
             categories,
+            config: None,
         }
+    }
+
+    /// Create a new test generator with configuration file
+    pub fn with_config(
+        analysis: CliAnalysis,
+        categories: Vec<TestCategory>,
+        config_path: Option<&Path>,
+    ) -> Result<Self> {
+        let config = load_config(config_path)?;
+        Ok(Self {
+            analysis,
+            categories,
+            config,
+        })
     }
 
     /// Generate all test cases based on selected categories
@@ -255,7 +275,20 @@ impl TestGenerator {
     fn generate_security_tests(&self) -> Result<Vec<TestCase>> {
         let mut tests = Vec::new();
 
+        // Get skip_options from config if available
+        let skip_options: Vec<String> = self
+            .config
+            .as_ref()
+            .and_then(|c| {
+                c.test_adjustments
+                    .security
+                    .as_ref()
+                    .map(|s| s.skip_options.iter().map(|opt| opt.name.clone()).collect())
+            })
+            .unwrap_or_default();
+
         // Find a string option for testing (prefer --config, --file, or first string option)
+        // Skip options that are in skip_options list
         let string_option = self
             .analysis
             .global_options
@@ -263,6 +296,11 @@ impl TestGenerator {
             .find(|opt| {
                 matches!(opt.option_type, OptionType::String | OptionType::Path)
                     && opt.long.is_some()
+                    && !skip_options.iter().any(|skip_name| {
+                        opt.long
+                            .as_ref()
+                            .is_some_and(|long| long.trim_start_matches("--") == skip_name)
+                    })
             })
             .and_then(|opt| opt.long.as_ref())
             .unwrap_or(&"--invalid-option".to_string())
@@ -290,7 +328,10 @@ impl TestGenerator {
                 "security-002".to_string(),
                 "Reject null byte in option value".to_string(),
                 TestCategory::Security,
-                format!(r#""$CLI_BINARY" {} $'/tmp/test\x00malicious'"#, string_option),
+                format!(
+                    r#""$CLI_BINARY" {} $'/tmp/test\x00malicious'"#,
+                    string_option
+                ),
             )
             .expect_nonzero_exit() // Accept exit code 1, 2, or any non-zero
             .with_priority(TestPriority::SecurityCheck)
@@ -341,6 +382,26 @@ impl TestGenerator {
         //     .with_tag("dos-protection".to_string())
         //     .with_tag("informational".to_string()),
         // );
+
+        // Add custom security tests from config
+        if let Some(config) = &self.config {
+            if let Some(security_config) = &config.test_adjustments.security {
+                for (idx, custom_test) in security_config.custom_tests.iter().enumerate() {
+                    tests.push(
+                        TestCase::new(
+                            format!("security-custom-{:03}", idx + 1),
+                            custom_test.description.clone(),
+                            TestCategory::Security,
+                            custom_test.command.clone(),
+                        )
+                        .with_exit_code(custom_test.expected_exit_code)
+                        .with_priority(TestPriority::SecurityCheck)
+                        .with_tag("custom".to_string())
+                        .with_tag(custom_test.name.clone()),
+                    );
+                }
+            }
+        }
 
         Ok(tests)
     }
@@ -509,6 +570,21 @@ impl TestGenerator {
     fn generate_destructive_ops_tests(&self) -> Result<Vec<TestCase>> {
         let mut tests = Vec::new();
 
+        // Get env_vars and cancel_exit_code from config
+        let env_vars = self
+            .config
+            .as_ref()
+            .and_then(|c| c.test_adjustments.destructive_ops.as_ref())
+            .map(|d| d.env_vars.clone())
+            .unwrap_or_default();
+
+        let cancel_exit_code = self
+            .config
+            .as_ref()
+            .and_then(|c| c.test_adjustments.destructive_ops.as_ref())
+            .map(|d| d.cancel_exit_code)
+            .unwrap_or(1); // Default to 1 if not specified
+
         // Look for destructive subcommands (delete, remove, clean, destroy, etc.)
         let destructive_keywords = ["delete", "remove", "clean", "destroy", "purge", "drop"];
 
@@ -540,18 +616,57 @@ impl TestGenerator {
                     format!(" {}", dummy_args)
                 };
 
-                // Test 1: Check for confirmation prompt
-                tests.push(
-                    TestCase::new(
-                        format!("destructive-{}-001", subcommand.name),
-                        format!("Subcommand '{}' requires confirmation", subcommand.name),
-                        TestCategory::DestructiveOps,
-                        format!("echo 'n' | \"$CLI_BINARY\" {}{}", subcommand.name, args_part),
+                // Build env vars prefix for commands
+                let env_prefix = if env_vars.is_empty() {
+                    String::new()
+                } else {
+                    env_vars
+                        .iter()
+                        .map(|(k, v)| format!("{}=\"{}\"", k, v))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                        + " "
+                };
+
+                // Test 1: Check for confirmation prompt (or skip if env vars set)
+                let test_command = if env_vars.is_empty() {
+                    // No env vars: test cancellation with 'n' input
+                    format!(
+                        "echo 'n' | \"$CLI_BINARY\" {}{}",
+                        subcommand.name, args_part
                     )
-                    .with_assertion(Assertion::OutputContains("confirm".to_string()))
-                    .with_tag("confirmation".to_string())
-                    .with_tag(subcommand.name.clone()),
-                );
+                } else {
+                    // With env vars: test auto-confirmation
+                    format!(
+                        "{}\"$CLI_BINARY\" {}{}",
+                        env_prefix, subcommand.name, args_part
+                    )
+                };
+
+                let mut test = TestCase::new(
+                    format!("destructive-{}-001", subcommand.name),
+                    if env_vars.is_empty() {
+                        format!("Subcommand '{}' requires confirmation", subcommand.name)
+                    } else {
+                        format!(
+                            "Subcommand '{}' auto-confirms with env vars",
+                            subcommand.name
+                        )
+                    },
+                    TestCategory::DestructiveOps,
+                    test_command,
+                )
+                .with_tag("confirmation".to_string())
+                .with_tag(subcommand.name.clone());
+
+                // Set expected exit code based on whether we're testing cancellation or execution
+                if env_vars.is_empty() {
+                    // Test cancellation: expect cancel_exit_code
+                    test = test.with_exit_code(cancel_exit_code);
+                }
+                // else: execution test, exit code depends on implementation (don't set)
+
+                tests.push(test);
 
                 // Test 2: Check for --yes or --force flag
                 let has_yes_flag = subcommand.options.iter().any(|opt| {
@@ -585,35 +700,87 @@ impl TestGenerator {
 
     /// Generate directory traversal tests
     fn generate_directory_traversal_tests(&self) -> Result<Vec<TestCase>> {
-        let tests = vec![
-            // Test 1: Large directory (1000 files)
-            TestCase::new(
-                "dir-traversal-001".to_string(),
-                "Handle directory with 1000 files".to_string(),
-                TestCategory::DirectoryTraversal,
-                "\"$CLI_BINARY\" /tmp/test-large-dir".to_string(),
-            )
-            .with_tag("performance".to_string())
-            .with_tag("large-dir".to_string()),
-            // Test 2: Deep directory nesting (50 levels)
-            TestCase::new(
-                "dir-traversal-002".to_string(),
-                "Handle deeply nested directory (50 levels)".to_string(),
-                TestCategory::DirectoryTraversal,
-                "\"$CLI_BINARY\" /tmp/test-deep-dir".to_string(),
-            )
-            .with_tag("performance".to_string())
-            .with_tag("deep-nesting".to_string()),
-            // Test 3: Symlink loops
-            TestCase::new(
-                "dir-traversal-003".to_string(),
-                "Detect and handle symlink loops".to_string(),
-                TestCategory::DirectoryTraversal,
-                "\"$CLI_BINARY\" /tmp/test-symlink-loop".to_string(),
-            )
-            .with_tag("symlink".to_string())
-            .with_tag("loop-detection".to_string()),
-        ];
+        let mut tests = Vec::new();
+
+        // Get test_directories from config or use defaults
+        let test_directories = self
+            .config
+            .as_ref()
+            .and_then(|c| c.test_adjustments.directory_traversal.as_ref())
+            .and_then(|dt| {
+                if dt.test_directories.is_empty() {
+                    None
+                } else {
+                    Some(dt.test_directories.clone())
+                }
+            });
+
+        if let Some(test_dirs) = test_directories {
+            // Use configured test directories
+            for (idx, test_dir) in test_dirs.iter().enumerate() {
+                let description = if let Some(file_count) = test_dir.file_count {
+                    format!(
+                        "Handle directory with {} files at {}",
+                        file_count, test_dir.path
+                    )
+                } else if let Some(depth) = test_dir.depth {
+                    format!(
+                        "Handle deeply nested directory (depth {}) at {}",
+                        depth, test_dir.path
+                    )
+                } else {
+                    format!("Handle directory at {}", test_dir.path)
+                };
+
+                tests.push(
+                    TestCase::new(
+                        format!("dir-traversal-{:03}", idx + 1),
+                        description,
+                        TestCategory::DirectoryTraversal,
+                        format!("\"$CLI_BINARY\" {}", test_dir.path),
+                    )
+                    .with_tag("configured".to_string())
+                    .with_tag(if test_dir.file_count.is_some() {
+                        "large-dir".to_string()
+                    } else if test_dir.depth.is_some() {
+                        "deep-nesting".to_string()
+                    } else {
+                        "basic".to_string()
+                    }),
+                );
+            }
+        } else {
+            // Use default tests
+            tests = vec![
+                // Test 1: Large directory (1000 files)
+                TestCase::new(
+                    "dir-traversal-001".to_string(),
+                    "Handle directory with 1000 files".to_string(),
+                    TestCategory::DirectoryTraversal,
+                    "\"$CLI_BINARY\" /tmp/test-large-dir".to_string(),
+                )
+                .with_tag("performance".to_string())
+                .with_tag("large-dir".to_string()),
+                // Test 2: Deep directory nesting (50 levels)
+                TestCase::new(
+                    "dir-traversal-002".to_string(),
+                    "Handle deeply nested directory (50 levels)".to_string(),
+                    TestCategory::DirectoryTraversal,
+                    "\"$CLI_BINARY\" /tmp/test-deep-dir".to_string(),
+                )
+                .with_tag("performance".to_string())
+                .with_tag("deep-nesting".to_string()),
+                // Test 3: Symlink loops
+                TestCase::new(
+                    "dir-traversal-003".to_string(),
+                    "Detect and handle symlink loops".to_string(),
+                    TestCategory::DirectoryTraversal,
+                    "\"$CLI_BINARY\" /tmp/test-symlink-loop".to_string(),
+                )
+                .with_tag("symlink".to_string())
+                .with_tag("loop-detection".to_string()),
+            ];
+        }
 
         Ok(tests)
     }

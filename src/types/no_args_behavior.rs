@@ -93,8 +93,12 @@ impl NoArgsBehavior {
     /// Get description for documentation
     pub fn description(&self) -> &'static str {
         match self {
-            Self::ShowHelp => "Displays help text and exits successfully when invoked without arguments",
-            Self::RequireSubcommand => "Requires a subcommand and exits with error when invoked without arguments",
+            Self::ShowHelp => {
+                "Displays help text and exits successfully when invoked without arguments"
+            }
+            Self::RequireSubcommand => {
+                "Requires a subcommand and exits with error when invoked without arguments"
+            }
             Self::Interactive => "Enters interactive mode (REPL) when invoked without arguments",
         }
     }

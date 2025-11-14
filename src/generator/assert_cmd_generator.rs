@@ -58,10 +58,8 @@ impl AssertCmdGenerator {
     /// Register all test templates
     fn register_templates(handlebars: &mut Handlebars) -> Result<()> {
         // Basic tests template
-        handlebars.register_template_string(
-            "basic",
-            include_str!("../templates/assert_cmd/basic.hbs"),
-        )?;
+        handlebars
+            .register_template_string("basic", include_str!("../templates/assert_cmd/basic.hbs"))?;
 
         // Security tests template
         handlebars.register_template_string(
@@ -70,16 +68,12 @@ impl AssertCmdGenerator {
         )?;
 
         // Help tests template
-        handlebars.register_template_string(
-            "help",
-            include_str!("../templates/assert_cmd/help.hbs"),
-        )?;
+        handlebars
+            .register_template_string("help", include_str!("../templates/assert_cmd/help.hbs"))?;
 
         // Path tests template
-        handlebars.register_template_string(
-            "path",
-            include_str!("../templates/assert_cmd/path.hbs"),
-        )?;
+        handlebars
+            .register_template_string("path", include_str!("../templates/assert_cmd/path.hbs"))?;
 
         // InputValidation tests template
         handlebars.register_template_string(
@@ -127,11 +121,11 @@ impl AssertCmdGenerator {
     /// Sanitized string safe for Rust string literals
     pub fn sanitize_for_rust_string(input: &str) -> String {
         input
-            .replace('\\', "\\\\")  // Backslash must be first
-            .replace('"', "\\\"")   // Double quote
-            .replace('\n', "\\n")   // Newline
-            .replace('\r', "\\r")   // Carriage return
-            .replace('\t', "\\t")   // Tab
+            .replace('\\', "\\\\") // Backslash must be first
+            .replace('"', "\\\"") // Double quote
+            .replace('\n', "\\n") // Newline
+            .replace('\r', "\\r") // Carriage return
+            .replace('\t', "\\t") // Tab
     }
 }
 

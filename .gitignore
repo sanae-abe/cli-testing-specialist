@@ -80,3 +80,9 @@ Cargo.lock
 **/*.rs.bk
 *.pdb
 .publish-state.json
+
+# Mutation testing
+mutants-out/
+mutants.out
+mutants.out.old
+.mutants.json

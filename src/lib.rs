@@ -24,6 +24,7 @@
 // Public modules
 pub mod analyzer;
 pub mod cli;
+pub mod config;
 pub mod error;
 pub mod generator;
 pub mod reporter;

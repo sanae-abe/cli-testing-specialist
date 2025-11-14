@@ -1,0 +1,161 @@
+name: Mutation Testing
+
+on:
+  # Run on push to main branch
+  push:
+    branches: [main]
+  # Run on pull requests
+  pull_request:
+    branches: [main]
+  # Allow manual trigger
+  workflow_dispatch:
+  # Weekly schedule (Sundays at 00:00 UTC)
+  schedule:
+    - cron: '0 0 * * 0'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  mutation-testing:
+    name: Mutation Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Install cargo-mutants
+        run: cargo install cargo-mutants --locked
+        env:
+          CARGO_INSTALL_OPTS: --force
+
+      - name: Run baseline tests
+        run: cargo test --lib --all-features
+        continue-on-error: false
+
+      - name: Run mutation testing
+        id: mutants
+        run: |
+          cargo mutants --all-features --output mutants-out 2>&1 | tee mutation-test.log
+        continue-on-error: true
+
+      - name: Parse mutation testing results
+        id: results
+        run: |
+          # Extract mutation score from output
+          if [ -f mutants-out/mutants.out ]; then
+            MUTATION_SCORE=$(grep -oP 'caught \K[0-9]+\.[0-9]+%' mutants-out/mutants.out | tail -1 || echo "0.0%")
+            CAUGHT=$(grep -oP 'caught: \K[0-9]+' mutants-out/mutants.out | tail -1 || echo "0")
+            MISSED=$(grep -oP 'missed: \K[0-9]+' mutants-out/mutants.out | tail -1 || echo "0")
+            TIMEOUT=$(grep -oP 'timeout: \K[0-9]+' mutants-out/mutants.out | tail -1 || echo "0")
+            TOTAL=$(grep -oP 'total: \K[0-9]+' mutants-out/mutants.out | tail -1 || echo "0")
+          else
+            MUTATION_SCORE="N/A"
+            CAUGHT="0"
+            MISSED="0"
+            TIMEOUT="0"
+            TOTAL="0"
+          fi
+
+          echo "mutation_score=$MUTATION_SCORE" >> $GITHUB_OUTPUT
+          echo "caught=$CAUGHT" >> $GITHUB_OUTPUT
+          echo "missed=$MISSED" >> $GITHUB_OUTPUT
+          echo "timeout=$TIMEOUT" >> $GITHUB_OUTPUT
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+
+      - name: Upload mutation testing artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutation-testing-results
+          path: |
+            mutants-out/
+            mutation-test.log
+          retention-days: 30
+
+      - name: Comment PR with mutation score
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const mutation_score = '${{ steps.results.outputs.mutation_score }}';
+            const caught = '${{ steps.results.outputs.caught }}';
+            const missed = '${{ steps.results.outputs.missed }}';
+            const timeout = '${{ steps.results.outputs.timeout }}';
+            const total = '${{ steps.results.outputs.total }}';
+
+            const comment = `## 🧬 Mutation Testing Results
+
+            | Metric | Value |
+            |--------|-------|
+            | **Mutation Score** | ${mutation_score} |
+            | Caught | ${caught} |
+            | Missed | ${missed} |
+            | Timeout | ${timeout} |
+            | **Total Mutants** | ${total} |
+
+            ${missed > 0 ? '⚠️ **Warning**: Some mutants were missed. Consider adding more tests to improve coverage.' : '✅ **Excellent**: All mutants were caught!'}
+
+            <details>
+            <summary>📊 View detailed results</summary>
+
+            Download the full mutation testing report from the workflow artifacts.
+
+            **What is Mutation Testing?**
+            Mutation testing evaluates test quality by introducing intentional bugs (mutations) and checking if tests catch them. A high mutation score indicates robust tests.
+
+            **Interpretation**:
+            - **Caught**: Tests detected the mutation (good)
+            - **Missed**: Tests passed despite the mutation (needs improvement)
+            - **Timeout**: Test took too long (possible infinite loop)
+
+            </details>
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Check mutation score threshold
+        run: |
+          SCORE=$(echo "${{ steps.results.outputs.mutation_score }}" | sed 's/%//')
+          if [ "$SCORE" != "N/A" ] && [ "$(echo "$SCORE < 80" | bc -l)" -eq 1 ]; then
+            echo "⚠️ Mutation score ($SCORE%) is below threshold (80%)"
+            echo "::warning::Mutation score is below 80%. Consider improving test quality."
+          else
+            echo "✅ Mutation score ($SCORE%) meets or exceeds threshold (80%)"
+          fi
+
+      - name: Generate mutation testing badge
+        if: github.ref == 'refs/heads/main'
+        run: |
+          SCORE="${{ steps.results.outputs.mutation_score }}"
+          COLOR="red"
+          if [ "$SCORE" != "N/A" ]; then
+            SCORE_NUM=$(echo "$SCORE" | sed 's/%//')
+            if [ "$(echo "$SCORE_NUM >= 80" | bc -l)" -eq 1 ]; then
+              COLOR="brightgreen"
+            elif [ "$(echo "$SCORE_NUM >= 60" | bc -l)" -eq 1 ]; then
+              COLOR="yellow"
+            fi
+          fi
+
+          echo "Mutation Score: $SCORE ($COLOR)"
+          # Badge URL: https://img.shields.io/badge/mutation-${SCORE}-${COLOR}

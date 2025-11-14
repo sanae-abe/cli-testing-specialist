@@ -39,13 +39,32 @@ pub fn validate_binary_path(path: &Path) -> Result<PathBuf> {
     Ok(canonical)
 }
 
-/// Execute binary with timeout and resource limits
+/// Execute binary with timeout and default resource limits
 ///
 /// This function provides safe execution with the following guarantees:
 /// - Timeout enforcement (prevents infinite loops)
 /// - Output capture (stdout and stderr)
 /// - Graceful cleanup on timeout
+/// - Resource limits applied (Unix only)
 pub fn execute_with_timeout(binary: &Path, args: &[&str], timeout: Duration) -> Result<String> {
+    execute_with_timeout_and_limits(
+        binary,
+        args,
+        timeout,
+        Some(&crate::utils::ResourceLimits::default()),
+    )
+}
+
+/// Execute binary with custom resource limits
+///
+/// This function allows specifying custom resource limits for the child process.
+/// If limits are None, no resource limits are applied (unsafe for untrusted binaries).
+pub fn execute_with_timeout_and_limits(
+    binary: &Path,
+    args: &[&str],
+    timeout: Duration,
+    limits: Option<&crate::utils::ResourceLimits>,
+) -> Result<String> {
     use std::io::Read;
 
     log::debug!(
@@ -55,12 +74,85 @@ pub fn execute_with_timeout(binary: &Path, args: &[&str], timeout: Duration) -> 
         timeout
     );
 
-    // Spawn child process
-    let mut child = Command::new(binary)
+    // Build command
+    let mut command = Command::new(binary);
+    command
         .args(args)
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+        .stderr(Stdio::piped());
+
+    // Apply resource limits in child process (Unix only)
+    #[cfg(unix)]
+    if let Some(resource_limits) = limits {
+        use std::os::unix::process::CommandExt;
+
+        // Clone limits for use in pre_exec closure
+        let max_memory = resource_limits.max_memory_bytes;
+        let max_fds = resource_limits.max_file_descriptors;
+        let max_procs = resource_limits.max_processes;
+
+        unsafe {
+            command.pre_exec(move || {
+                use libc::{getrlimit, rlimit, setrlimit, RLIMIT_AS, RLIMIT_NOFILE, RLIMIT_NPROC};
+
+                // Set memory limit (only if lower than current)
+                let mut current_limit = rlimit {
+                    rlim_cur: 0,
+                    rlim_max: 0,
+                };
+
+                // Memory limit
+                if getrlimit(RLIMIT_AS, &mut current_limit) == 0 {
+                    // Only set if we're lowering the limit (or if unlimited)
+                    if current_limit.rlim_max == libc::RLIM_INFINITY
+                        || current_limit.rlim_max > max_memory
+                    {
+                        let mem_limit = rlimit {
+                            rlim_cur: max_memory,
+                            rlim_max: max_memory,
+                        };
+                        // Ignore error - some systems may not allow lowering limits
+                        let _ = setrlimit(RLIMIT_AS, &mem_limit);
+                    }
+                }
+
+                // File descriptor limit
+                if getrlimit(RLIMIT_NOFILE, &mut current_limit) == 0
+                    && (current_limit.rlim_max == libc::RLIM_INFINITY
+                        || current_limit.rlim_max > max_fds)
+                {
+                    let fd_limit = rlimit {
+                        rlim_cur: max_fds,
+                        rlim_max: max_fds,
+                    };
+                    let _ = setrlimit(RLIMIT_NOFILE, &fd_limit);
+                }
+
+                // Process limit
+                if getrlimit(RLIMIT_NPROC, &mut current_limit) == 0
+                    && (current_limit.rlim_max == libc::RLIM_INFINITY
+                        || current_limit.rlim_max > max_procs)
+                {
+                    let proc_limit = rlimit {
+                        rlim_cur: max_procs,
+                        rlim_max: max_procs,
+                    };
+                    let _ = setrlimit(RLIMIT_NPROC, &proc_limit);
+                }
+
+                Ok(())
+            });
+        }
+    }
+
+    // Spawn child process
+    let mut child = command.spawn()?;
+
+    // Apply resource limits on Windows (must be done after spawn)
+    #[cfg(windows)]
+    if let Some(resource_limits) = limits {
+        apply_windows_job_limits(&child, resource_limits)?;
+    }
 
     // Wait with timeout
     let start = std::time::Instant::now();
@@ -106,6 +198,68 @@ pub fn execute_with_timeout(binary: &Path, args: &[&str], timeout: Duration) -> 
             }
         }
     }
+}
+
+/// Apply resource limits to a Windows child process using Job Objects
+#[cfg(windows)]
+fn apply_windows_job_limits(
+    child: &std::process::Child,
+    limits: &crate::utils::ResourceLimits,
+) -> Result<()> {
+    use std::os::windows::process::CommandExt;
+    use windows::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_BASIC_LIMIT_INFORMATION,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_ACTIVE_PROCESS,
+        JOB_OBJECT_LIMIT_JOB_MEMORY, JOB_OBJECT_LIMIT_PROCESS_MEMORY,
+    };
+
+    unsafe {
+        // Create a job object
+        let job = CreateJobObjectW(None, None).map_err(|e| {
+            CliTestError::ExecutionFailed(format!("Failed to create job object: {}", e))
+        })?;
+
+        // Set job limits
+        let mut job_limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION {
+            BasicLimitInformation: JOBOBJECT_BASIC_LIMIT_INFORMATION {
+                LimitFlags: JOB_OBJECT_LIMIT_ACTIVE_PROCESS
+                    | JOB_OBJECT_LIMIT_PROCESS_MEMORY
+                    | JOB_OBJECT_LIMIT_JOB_MEMORY,
+                ActiveProcessLimit: limits.max_processes as u32,
+                ..Default::default()
+            },
+            ProcessMemoryLimit: limits.max_memory_bytes as usize,
+            JobMemoryLimit: limits.max_memory_bytes as usize,
+            ..Default::default()
+        };
+
+        // Apply limits to job object
+        SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &mut job_limits as *mut _ as *mut _,
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        )
+        .map_err(|e| {
+            CloseHandle(job);
+            CliTestError::ExecutionFailed(format!("Failed to set job limits: {}", e))
+        })?;
+
+        // Get child process handle and assign to job
+        let child_handle = HANDLE(child.id() as isize);
+        AssignProcessToJobObject(job, child_handle).map_err(|e| {
+            CloseHandle(job);
+            CliTestError::ExecutionFailed(format!("Failed to assign process to job: {}", e))
+        })?;
+
+        // Note: We intentionally don't close the job handle here
+        // The job will terminate when the child process exits
+        log::debug!("Resource limits applied to child process via Job Object");
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

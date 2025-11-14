@@ -79,7 +79,6 @@ impl TestPriority {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -60,6 +60,10 @@ handlebars = "5.1"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+# Windows system calls (for Job Objects)
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.52", features = ["Win32_System_JobObjects", "Win32_Foundation", "Win32_Security"] }
+
 [dev-dependencies]
 # Integration testing
 assert_cmd = "2.0"

@@ -1,0 +1,169 @@
+project:
+  last_updated: '2025-11-14T12:29:55.566111Z'
+  name: CLI Testing Specialist
+tasks:
+- acceptance_criteria:
+  - Cargo.toml metadata is verified and complete
+  - cargo publish --dry-run succeeds without errors
+  - Package is published to crates.io
+  - Installation via cargo install works correctly
+  docs:
+  - docs/RUST_V1_DESIGN.md#Publishing
+  - Cargo.toml
+  effort: 4h
+  goal: Crates.io Release - Package and publish to Rust package registry
+  id: task-1
+  priority: critical
+  status: pending
+- acceptance_criteria:
+  - Full test suite passes on all platforms (Linux/macOS/Windows)
+  - All documentation examples verified
+  - README accuracy confirmed
+  - LICENSE file verified
+  docs:
+  - todos.md#Success-Criteria-Checklist
+  effort: 6h
+  goal: Final QA - Complete quality assurance testing
+  id: task-2
+  priority: critical
+  status: pending
+- acceptance_criteria:
+  - ParallelStrategy enum defined (Sequential/SubcommandLevel/BinaryLevel)
+  - choose_strategy() function implemented
+  - Benchmarks added for each strategy
+  - Decision documented in RUST_V1_DESIGN.md
+  docs:
+  - docs/RUST_V1_DESIGN.md#Performance
+  - src/generator/test_generator.rs
+  effort: 3h
+  goal: Parallel Processing Strategy - Implement performance optimization
+  id: task-3
+  priority: high
+  status: pending
+- acceptance_criteria:
+  - Global config cache implemented with once_cell::Lazy
+  - All YAML configs loaded at startup
+  - Memory impact measured and verified <2MB
+  - Performance improvement documented
+  docs:
+  - config/option-patterns.yaml
+  - config/numeric-constraints.yaml
+  - config/enum-definitions.yaml
+  effort: 2h
+  goal: YAML Config Caching - Implement global configuration caching
+  id: task-4
+  priority: high
+  status: pending
+- acceptance_criteria:
+  - Formula/cli-testing-specialist.rb created
+  - Formula tested locally
+  - PR submitted to homebrew-core or tap created
+  - Installation via brew install verified
+  docs:
+  - docs/PACKAGING.md
+  effort: 3h
+  goal: Homebrew Formula - Create package manager distribution
+  id: task-5
+  priority: high
+  status: pending
+- acceptance_criteria:
+  - release.yml workflow created
+  - Binaries built for x86_64-unknown-linux-gnu
+  - Binaries built for x86_64-apple-darwin
+  - Binaries built for aarch64-apple-darwin
+  - Binaries built for x86_64-pc-windows-msvc
+  - Binaries uploaded to GitHub Releases
+  docs:
+  - .github/workflows/release.yml
+  effort: 4h
+  goal: GitHub Releases - Setup automated binary distribution
+  id: task-6
+  priority: high
+  status: pending
+- acceptance_criteria:
+  - benches/benchmark.rs created
+  - analyze() function benchmarked
+  - generate() function benchmarked
+  - JSON serialization benchmarked
+  - Comparison with Bash prototype documented
+  completed_at: '2025-11-14T12:29:55.565571Z'
+  docs:
+  - benches/benchmark.rs
+  - docs/PERFORMANCE.md
+  effort: 2h
+  goal: Criterion Benchmarks - Setup performance measurement
+  id: task-7
+  priority: high
+  status: completed
+- acceptance_criteria:
+  - Versioning Policy section added to RUST_V1_DESIGN.md
+  - SemVer rules defined (MAJOR/MINOR/PATCH)
+  - Backward compatibility guarantees documented
+  - Deprecation policy established (2 MINOR versions warning)
+  docs:
+  - docs/RUST_V1_DESIGN.md#Versioning
+  effort: 1h
+  goal: Versioning Policy - Define maintenance and compatibility standards
+  id: task-8
+  priority: high
+  status: pending
+- acceptance_criteria:
+  - UserConfig struct implemented with version field
+  - migrate_config() function implemented
+  - Version detection logic added
+  - Config migration tests added
+  docs:
+  - src/config/user_config.rs
+  effort: 2h
+  goal: Config File Migration - Implement user configuration management
+  id: task-9
+  priority: high
+  status: pending
+- acceptance_criteria:
+  - Examples added to all doc comments
+  - Documentation generated with cargo doc
+  - All broken links fixed (cargo rustdoc -- -D warnings)
+  - Public API fully documented
+  docs:
+  - src/lib.rs
+  effort: 3h
+  goal: API Documentation - Complete rustdoc documentation
+  id: task-10
+  priority: high
+  status: pending
+- acceptance_criteria:
+  - All features listed
+  - Breaking changes documented
+  - Migration guide from Bash prototype added
+  docs:
+  - CHANGELOG.md
+  effort: 1h
+  goal: Release Notes - Document v1.0.0 release
+  id: task-11
+  priority: high
+  status: pending
+- acceptance_criteria:
+  - .cli-test-config.yml schema defined with security considerations
+  - Config file parsing implemented with validation
+  - test_adjustments.security.skip_options supported
+  - test_adjustments.directory_traversal.test_directories (declarative) supported
+  - test_adjustments.directory_traversal.setup_commands (imperative) supported with
+    --allow-setup flag
+  - Command validation (forbidden patterns check) implemented
+  - test_adjustments.destructive_ops.env_vars supported
+  - Documentation added to README.md
+  - Integration tests with backup-suite verified (100% pass rate)
+  - Security audit passed (multi-layered defense validated)
+  completed_at: '2025-11-14T22:02:00Z'
+  docs:
+  - src/types/config.rs
+  - src/config/validator.rs
+  - docs/TOOL_SPECIFIC_CONFIG.md
+  - README.md#Tool-Specific-Configuration
+  effort: 6h
+  goal: Tool-Specific Test Configuration - Support .cli-test-config.yml for test
+    adjustments
+  id: task-12
+  priority: critical
+  status: completed
+  type: feature

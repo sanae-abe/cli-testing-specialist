@@ -85,9 +85,10 @@ fn main() -> Result<()> {
         } => {
             log::info!("Generating tests from: {}", analysis.display());
 
-            // 1. Load analysis JSON
+            // 1. Load analysis JSON (with safe deserialization)
             let analysis_json = fs::read_to_string(&analysis)?;
-            let cli_analysis: CliAnalysis = serde_json::from_str(&analysis_json)?;
+            let cli_analysis: CliAnalysis =
+                cli_testing_specialist::utils::deserialize_json_safe(&analysis_json)?;
 
             log::info!(
                 "Loaded analysis for binary: {} (version: {})",
@@ -108,8 +109,12 @@ fn main() -> Result<()> {
 
             match format {
                 TestFormat::Bats => {
-                    // 3. Generate test cases (BATS)
-                    let generator = TestGenerator::new(cli_analysis.clone(), selected_categories);
+                    // 3. Generate test cases (BATS) with config support
+                    let generator = TestGenerator::with_config(
+                        cli_analysis.clone(),
+                        selected_categories,
+                        None, // Auto-detect .cli-test-config.yml
+                    )?;
                     let test_cases = if num_categories > 1 {
                         // Use parallel generation for multiple categories
                         log::info!("Using parallel test generation");
@@ -173,7 +178,10 @@ fn main() -> Result<()> {
                     }
 
                     // 4. Success message
-                    println!("✓ assert_cmd test generation complete: {} files", output_files.len());
+                    println!(
+                        "✓ assert_cmd test generation complete: {} files",
+                        output_files.len()
+                    );
                     println!("  Output directory: {}", output.display());
                     println!("  Format: Rust (assert_cmd)");
                     println!("\nGenerated files:");
@@ -263,9 +271,7 @@ fn main() -> Result<()> {
             if security_total > 0 {
                 println!(
                     "Security Checks: {}/{} passed ({} vulnerabilities detected)",
-                    security_passed,
-                    security_total,
-                    security_failed
+                    security_passed, security_total, security_failed
                 );
 
                 // Display vulnerability warnings

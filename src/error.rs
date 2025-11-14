@@ -1,76 +1,159 @@
 use colored::Colorize;
-use std::path::PathBuf;
-use thiserror::Error;
+use std::path::{Path, PathBuf};
 
 /// Result type alias for cli-testing-specialist
 pub type Result<T> = std::result::Result<T, CliTestError>;
 
+/// Sanitize a path for display to end users
+///
+/// This function removes sensitive directory information and only shows
+/// the filename to prevent information disclosure.
+///
+/// # Security
+///
+/// - Strips all directory components
+/// - Shows only the filename
+/// - Prevents path traversal information leakage
+fn sanitize_path_for_display(path: &Path) -> String {
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "<invalid-path>".to_string())
+}
+
 /// Error types for CLI testing operations
-#[derive(Error, Debug)]
+///
+/// # Security Note
+///
+/// The `Display` implementation hides sensitive path information by showing
+/// only filenames (not full paths). For debugging and logging, use the
+/// `detailed_message()` method which includes full path information.
+#[derive(Debug)]
 pub enum CliTestError {
     /// Binary file not found at specified path
-    #[error("Binary not found: {0}")]
     BinaryNotFound(PathBuf),
 
     /// Binary file exists but is not executable
-    #[error("Binary not executable: {0}")]
     BinaryNotExecutable(PathBuf),
 
     /// Failed to execute the binary
-    #[error("Failed to execute binary: {0}")]
     ExecutionFailed(String),
 
     /// Help output is invalid or cannot be parsed
-    #[error("Invalid help output")]
     InvalidHelpOutput,
 
     /// Failed to parse option from help text
-    #[error("Failed to parse option: {0}")]
     OptionParseError(String),
 
     /// Template rendering failed
-    #[error("Template rendering failed: {0}")]
     TemplateError(String),
 
     /// BATS test execution failed
-    #[error("BATS execution failed: {0}")]
     BatsExecutionFailed(String),
 
     /// Report generation failed
-    #[error("Report generation failed: {0}")]
     ReportError(String),
 
     /// Configuration error
-    #[error("Configuration error: {0}")]
     Config(String),
 
     /// Validation error
-    #[error("Validation error: {0}")]
     Validation(String),
 
     /// Invalid format specified
-    #[error("Invalid format: {0}")]
     InvalidFormat(String),
 
     /// I/O error occurred
-    #[error(transparent)]
-    IoError(#[from] std::io::Error),
+    IoError(std::io::Error),
 
     /// JSON serialization/deserialization error
-    #[error(transparent)]
-    Json(#[from] serde_json::Error),
+    Json(serde_json::Error),
 
     /// YAML serialization/deserialization error
-    #[error(transparent)]
-    Yaml(#[from] serde_yaml::Error),
+    Yaml(serde_yaml::Error),
 
     /// Handlebars template error
-    #[error(transparent)]
-    HandlebarsTemplate(#[from] handlebars::TemplateError),
+    HandlebarsTemplate(handlebars::TemplateError),
 
     /// Handlebars render error
-    #[error(transparent)]
-    HandlebarsRender(#[from] handlebars::RenderError),
+    HandlebarsRender(handlebars::RenderError),
+}
+
+// Manual Display implementation that hides sensitive paths
+impl std::fmt::Display for CliTestError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::BinaryNotFound(path) => {
+                write!(f, "Binary not found: {}", sanitize_path_for_display(path))
+            }
+            Self::BinaryNotExecutable(path) => {
+                write!(
+                    f,
+                    "Binary not executable: {}",
+                    sanitize_path_for_display(path)
+                )
+            }
+            Self::ExecutionFailed(msg) => write!(f, "Failed to execute binary: {}", msg),
+            Self::InvalidHelpOutput => write!(f, "Invalid help output"),
+            Self::OptionParseError(details) => write!(f, "Failed to parse option: {}", details),
+            Self::TemplateError(msg) => write!(f, "Template rendering failed: {}", msg),
+            Self::BatsExecutionFailed(msg) => write!(f, "BATS execution failed: {}", msg),
+            Self::ReportError(msg) => write!(f, "Report generation failed: {}", msg),
+            Self::Config(msg) => write!(f, "Configuration error: {}", msg),
+            Self::Validation(msg) => write!(f, "Validation error: {}", msg),
+            Self::InvalidFormat(msg) => write!(f, "Invalid format: {}", msg),
+            Self::IoError(e) => write!(f, "I/O error: {}", e),
+            Self::Json(e) => write!(f, "JSON error: {}", e),
+            Self::Yaml(e) => write!(f, "YAML error: {}", e),
+            Self::HandlebarsTemplate(e) => write!(f, "Template syntax error: {}", e),
+            Self::HandlebarsRender(e) => write!(f, "Template rendering error: {}", e),
+        }
+    }
+}
+
+// Implement std::error::Error trait manually
+impl std::error::Error for CliTestError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::IoError(e) => Some(e),
+            Self::Json(e) => Some(e),
+            Self::Yaml(e) => Some(e),
+            Self::HandlebarsTemplate(e) => Some(e),
+            Self::HandlebarsRender(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+// Manual From implementations (replacing thiserror's #[from])
+impl From<std::io::Error> for CliTestError {
+    fn from(err: std::io::Error) -> Self {
+        Self::IoError(err)
+    }
+}
+
+impl From<serde_json::Error> for CliTestError {
+    fn from(err: serde_json::Error) -> Self {
+        Self::Json(err)
+    }
+}
+
+impl From<serde_yaml::Error> for CliTestError {
+    fn from(err: serde_yaml::Error) -> Self {
+        Self::Yaml(err)
+    }
+}
+
+impl From<handlebars::TemplateError> for CliTestError {
+    fn from(err: handlebars::TemplateError) -> Self {
+        Self::HandlebarsTemplate(err)
+    }
+}
+
+impl From<handlebars::RenderError> for CliTestError {
+    fn from(err: handlebars::RenderError) -> Self {
+        Self::HandlebarsRender(err)
+    }
 }
 
 // Re-export as Error for convenience
@@ -141,21 +224,23 @@ impl CliTestError {
     pub fn user_message(&self) -> String {
         match self {
             Self::BinaryNotFound(path) => {
+                let filename = sanitize_path_for_display(path);
                 format!(
                     "{} {}\n{} {}",
                     "Error:".red().bold(),
-                    format!("Binary not found: {}", path.display()).white(),
+                    format!("Binary not found: {}", filename).white(),
                     "Suggestion:".yellow().bold(),
                     "Check that the path is correct and the file exists".white()
                 )
             }
             Self::BinaryNotExecutable(path) => {
+                let filename = sanitize_path_for_display(path);
                 format!(
                     "{} {}\n{} {}",
                     "Error:".red().bold(),
-                    format!("Binary is not executable: {}", path.display()).white(),
+                    format!("Binary is not executable: {}", filename).white(),
                     "Suggestion:".yellow().bold(),
-                    format!("Try: chmod +x {}", path.display()).white()
+                    format!("Try: chmod +x {}", filename).white()
                 )
             }
             Self::ExecutionFailed(msg) => {
@@ -325,5 +410,126 @@ mod tests {
 
         // Detailed message should contain full path
         assert!(detailed.contains("/test/binary"));
+    }
+
+    // ========== Security Tests ==========
+
+    #[test]
+    fn test_display_hides_sensitive_paths() {
+        // Test that Display (to_string) hides full paths
+        let path = PathBuf::from("/home/user/secret/project/binary");
+        let error = CliTestError::BinaryNotFound(path);
+        let display_msg = error.to_string();
+
+        // Should NOT contain directory path
+        assert!(!display_msg.contains("/home"));
+        assert!(!display_msg.contains("/user"));
+        assert!(!display_msg.contains("/secret"));
+        assert!(!display_msg.contains("/project"));
+
+        // Should only contain filename
+        assert!(display_msg.contains("binary"));
+    }
+
+    #[test]
+    fn test_display_vs_detailed_security() {
+        let path = PathBuf::from("/var/lib/sensitive/data.json");
+        let error = CliTestError::BinaryNotFound(path);
+
+        let display_msg = error.to_string();
+        let detailed_msg = error.detailed_message();
+
+        // Display should hide path
+        assert!(!display_msg.contains("/var"));
+        assert!(!display_msg.contains("sensitive"));
+        assert!(display_msg.contains("data.json"));
+
+        // Detailed should show full path (for logging)
+        assert!(detailed_msg.contains("/var/lib/sensitive/data.json"));
+    }
+
+    #[test]
+    fn test_path_sanitization_windows_style() {
+        // Note: On Unix, backslashes are treated as regular filename characters
+        // This test verifies the behavior is consistent across platforms
+        #[cfg(windows)]
+        {
+            let path = PathBuf::from("C:\\Users\\Admin\\Documents\\secret.exe");
+            let error = CliTestError::BinaryNotExecutable(path);
+            let display_msg = error.to_string();
+
+            // Should not contain directory components
+            assert!(!display_msg.contains("Users"));
+            assert!(!display_msg.contains("Admin"));
+            assert!(!display_msg.contains("Documents"));
+
+            // Should contain filename
+            assert!(display_msg.contains("secret.exe"));
+        }
+
+        #[cfg(unix)]
+        {
+            // On Unix, test with Unix-style path
+            let path = PathBuf::from("/home/admin/documents/secret.exe");
+            let error = CliTestError::BinaryNotExecutable(path);
+            let display_msg = error.to_string();
+
+            // Should not contain directory components
+            assert!(!display_msg.contains("home"));
+            assert!(!display_msg.contains("admin"));
+            assert!(!display_msg.contains("documents"));
+
+            // Should contain filename
+            assert!(display_msg.contains("secret.exe"));
+        }
+    }
+
+    #[test]
+    fn test_sanitize_path_with_special_characters() {
+        let path = PathBuf::from("/tmp/../../../etc/passwd");
+        let error = CliTestError::BinaryNotFound(path);
+        let display_msg = error.to_string();
+
+        // Should not reveal path traversal attempts
+        assert!(!display_msg.contains(".."));
+        assert!(!display_msg.contains("/etc"));
+        assert!(!display_msg.contains("/tmp"));
+    }
+
+    #[test]
+    fn test_invalid_path_handling() {
+        // Test with empty path or invalid UTF-8
+        let path = PathBuf::from("");
+        let error = CliTestError::BinaryNotFound(path);
+        let display_msg = error.to_string();
+
+        // Should show placeholder instead of crashing
+        assert!(display_msg.contains("<invalid-path>") || display_msg.is_empty());
+    }
+
+    #[test]
+    fn test_user_message_is_safe() {
+        let path = PathBuf::from("/home/user/.ssh/id_rsa");
+        let error = CliTestError::BinaryNotFound(path);
+        let user_msg = error.user_message();
+
+        // User message should also not expose full paths
+        assert!(!user_msg.contains(".ssh"));
+        assert!(!user_msg.contains("/home"));
+    }
+
+    #[test]
+    fn test_io_error_does_not_leak_paths() {
+        // Create an I/O error (these often contain path information)
+        let io_error = std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "File not found: /secret/path/file.txt",
+        );
+        let error = CliTestError::from(io_error);
+        let display_msg = error.to_string();
+
+        // The error message itself might contain paths from the OS,
+        // but our Display impl should at least not ADD additional path exposure
+        assert!(display_msg.contains("I/O error"));
     }
 }

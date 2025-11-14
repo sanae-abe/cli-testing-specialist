@@ -54,9 +54,10 @@ impl OptionInferrer {
         let mut cache = PATTERN_CACHE.lock().unwrap();
 
         if cache.is_none() {
-            // Load and parse YAML config
+            // Load and parse YAML config (with safe deserialization)
             let config_content = std::fs::read_to_string(config_path)?;
-            let config: OptionPatternsConfig = serde_yaml::from_str(&config_content)?;
+            let config: OptionPatternsConfig =
+                crate::utils::deserialize_yaml_safe(&config_content)?;
             *cache = Some(config);
         }
 

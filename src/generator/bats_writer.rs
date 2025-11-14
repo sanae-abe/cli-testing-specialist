@@ -134,7 +134,10 @@ impl BatsWriter {
         writeln!(writer, "    CLI_BINARY=\"{}\"", self.binary_path.display())?;
         writeln!(writer, "    BINARY_BASENAME=\"{}\"", self.binary_name)?;
         writeln!(writer)?;
-        writeln!(writer, "    # Export CLI_BINARY for subshell tests (multi-shell compatibility)")?;
+        writeln!(
+            writer,
+            "    # Export CLI_BINARY for subshell tests (multi-shell compatibility)"
+        )?;
         writeln!(writer, "    export CLI_BINARY")?;
         writeln!(writer)?;
         writeln!(

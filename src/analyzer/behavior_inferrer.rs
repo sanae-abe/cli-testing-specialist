@@ -72,9 +72,7 @@ impl BehaviorInferrer {
 
             // Check for subcommand requirement patterns
             if self.requires_subcommand_from_usage(&pattern) {
-                log::info!(
-                    "Inferred no-args behavior: RequireSubcommand (from Usage pattern)"
-                );
+                log::info!("Inferred no-args behavior: RequireSubcommand (from Usage pattern)");
                 return NoArgsBehavior::RequireSubcommand;
             }
 
