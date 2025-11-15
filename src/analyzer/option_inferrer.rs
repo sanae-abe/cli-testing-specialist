@@ -30,9 +30,72 @@ struct PatternSettings {
     min_keyword_length: usize,
 }
 
+/// Numeric constraint definition from YAML
+#[derive(Debug, Clone, Deserialize)]
+struct NumericConstraint {
+    aliases: Vec<String>,
+    min: i64,
+    max: i64,
+    #[serde(rename = "type")]
+    #[allow(dead_code)]
+    constraint_type: String,
+    #[allow(dead_code)]
+    unit: Option<String>,
+    #[allow(dead_code)]
+    description: String,
+}
+
+/// Numeric constraints configuration from YAML
+#[derive(Debug, Clone, Deserialize)]
+struct NumericConstraintsConfig {
+    constraints: HashMap<String, NumericConstraint>,
+    default_constraints: DefaultNumericConstraints,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct DefaultNumericConstraints {
+    min: i64,
+    max: i64,
+    #[serde(rename = "type")]
+    #[allow(dead_code)]
+    constraint_type: String,
+}
+
+/// Enum definition from YAML
+#[derive(Debug, Clone, Deserialize)]
+struct EnumDefinition {
+    aliases: Vec<String>,
+    values: Vec<String>,
+    #[allow(dead_code)]
+    case_sensitive: bool,
+    #[allow(dead_code)]
+    description: String,
+}
+
+/// Enum definitions configuration from YAML
+#[derive(Debug, Clone, Deserialize)]
+struct EnumDefinitionsConfig {
+    enums: HashMap<String, EnumDefinition>,
+    #[allow(dead_code)]
+    default_enum: DefaultEnumConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
+struct DefaultEnumConfig {
+    case_sensitive: bool,
+    allow_partial_match: bool,
+}
+
 lazy_static! {
     /// Global cache for option patterns loaded from YAML
     static ref PATTERN_CACHE: Mutex<Option<OptionPatternsConfig>> = Mutex::new(None);
+
+    /// Global cache for numeric constraints loaded from YAML
+    static ref NUMERIC_CONSTRAINTS_CACHE: Mutex<Option<NumericConstraintsConfig>> = Mutex::new(None);
+
+    /// Global cache for enum definitions loaded from YAML
+    static ref ENUM_DEFINITIONS_CACHE: Mutex<Option<EnumDefinitionsConfig>> = Mutex::new(None);
 }
 
 /// Option Type Inferrer - Infers option types from names and patterns
@@ -182,15 +245,39 @@ impl Default for OptionInferrer {
     }
 }
 
+/// Load numeric constraints configuration from YAML (with caching)
+fn load_numeric_constraints_config() -> Result<NumericConstraintsConfig> {
+    let mut cache = NUMERIC_CONSTRAINTS_CACHE.lock().unwrap();
+
+    if cache.is_none() {
+        // Load and parse YAML config
+        let config_content = std::fs::read_to_string("config/numeric-constraints.yaml")?;
+        let config: NumericConstraintsConfig =
+            crate::utils::deserialize_yaml_safe(&config_content)?;
+        *cache = Some(config);
+    }
+
+    Ok(cache.as_ref().unwrap().clone())
+}
+
 /// Apply numeric constraints from numeric-constraints.yaml
 ///
-/// This function would load constraints like:
+/// Loads constraints like:
 /// - Port numbers: 1-65535
 /// - Timeouts: 0-3600
 /// - Percentages: 0-100
 ///
-/// For now, this is a placeholder for future implementation.
+/// Uses global cache for performance (loaded once, reused for all subsequent calls).
 pub fn apply_numeric_constraints(options: &mut [CliOption]) {
+    // Load config from cache (or file if not cached)
+    let config = match load_numeric_constraints_config() {
+        Ok(config) => config,
+        Err(e) => {
+            log::warn!("Failed to load numeric constraints: {}", e);
+            return; // Silently skip if config not available
+        }
+    };
+
     for option in options.iter_mut() {
         if let OptionType::Numeric {
             ref mut min,
@@ -204,42 +291,61 @@ pub fn apply_numeric_constraints(options: &mut [CliOption]) {
                 .map(|s| s.trim_start_matches('-').to_lowercase())
                 .unwrap_or_default();
 
-            // Apply known constraints
-            if option_name.contains("port") {
-                *min = Some(1);
-                *max = Some(65535);
-            } else if option_name.contains("timeout") || option_name.contains("duration") {
-                *min = Some(0);
-                *max = Some(3600); // 1 hour max
-            } else if option_name.contains("percent") || option_name.contains("ratio") {
-                *min = Some(0);
-                *max = Some(100);
+            // Try to match against constraint aliases
+            let mut matched = false;
+            for constraint in config.constraints.values() {
+                if constraint
+                    .aliases
+                    .iter()
+                    .any(|alias| option_name.contains(&alias.to_lowercase()))
+                {
+                    *min = Some(constraint.min);
+                    *max = Some(constraint.max);
+                    matched = true;
+                    break;
+                }
+            }
+
+            // Apply default constraints if no match found
+            if !matched {
+                *min = Some(config.default_constraints.min);
+                *max = Some(config.default_constraints.max);
             }
         }
     }
 }
 
+/// Load enum definitions configuration from YAML (with caching)
+fn load_enum_definitions_config() -> Result<EnumDefinitionsConfig> {
+    let mut cache = ENUM_DEFINITIONS_CACHE.lock().unwrap();
+
+    if cache.is_none() {
+        // Load and parse YAML config
+        let config_content = std::fs::read_to_string("config/enum-definitions.yaml")?;
+        let config: EnumDefinitionsConfig = crate::utils::deserialize_yaml_safe(&config_content)?;
+        *cache = Some(config);
+    }
+
+    Ok(cache.as_ref().unwrap().clone())
+}
+
 /// Load enum values from enum-definitions.yaml
 ///
-/// This function would load known enum values like:
+/// Loads known enum values like:
 /// - format: json, yaml, xml, toml
 /// - log-level: debug, info, warn, error
 /// - protocol: http, https, ftp, ssh
 ///
-/// For now, this is a placeholder for future implementation.
+/// Uses global cache for performance (loaded once, reused for all subsequent calls).
 pub fn load_enum_values(options: &mut [CliOption]) {
-    let known_enums: HashMap<&str, Vec<&str>> = [
-        ("format", vec!["json", "yaml", "xml", "toml", "csv"]),
-        ("log-level", vec!["debug", "info", "warn", "error", "fatal"]),
-        (
-            "protocol",
-            vec!["http", "https", "ftp", "ssh", "tcp", "udp"],
-        ),
-        ("output", vec!["json", "yaml", "text", "table"]),
-    ]
-    .iter()
-    .cloned()
-    .collect();
+    // Load config from cache (or file if not cached)
+    let config = match load_enum_definitions_config() {
+        Ok(config) => config,
+        Err(e) => {
+            log::warn!("Failed to load enum definitions: {}", e);
+            return; // Silently skip if config not available
+        }
+    };
 
     for option in options.iter_mut() {
         if let OptionType::Enum { ref mut values } = option.option_type {
@@ -250,10 +356,14 @@ pub fn load_enum_values(options: &mut [CliOption]) {
                 .map(|s| s.trim_start_matches('-').to_lowercase())
                 .unwrap_or_default();
 
-            // Check if we have known values for this enum
-            for (key, enum_values) in &known_enums {
-                if option_name.contains(key) {
-                    *values = enum_values.iter().map(|s| s.to_string()).collect();
+            // Try to match against enum aliases
+            for enum_def in config.enums.values() {
+                if enum_def
+                    .aliases
+                    .iter()
+                    .any(|alias| option_name.contains(&alias.to_lowercase()))
+                {
+                    *values = enum_def.values.clone();
                     break;
                 }
             }
