@@ -3,9 +3,9 @@ use cli_testing_specialist::utils::io_optimized::{
     read_json_naive, read_json_optimized, write_json_naive, write_json_optimized,
 };
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use std::hint::black_box;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::hint::black_box;
 use tempfile::NamedTempFile;
 
 /// Small test data (~1KB JSON)
@@ -32,11 +32,13 @@ struct MediumData {
 
 fn create_medium_data() -> MediumData {
     MediumData {
-        items: (0..100).map(|i| SmallData {
-            name: format!("item-{}", i),
-            value: i,
-            items: (0..10).map(|j| format!("sub-{}-{}", i, j)).collect(),
-        }).collect(),
+        items: (0..100)
+            .map(|i| SmallData {
+                name: format!("item-{}", i),
+                value: i,
+                items: (0..10).map(|j| format!("sub-{}-{}", i, j)).collect(),
+            })
+            .collect(),
     }
 }
 

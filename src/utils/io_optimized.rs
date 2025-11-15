@@ -205,7 +205,11 @@ mod tests {
         TestData {
             name: "test".to_string(),
             value: 42,
-            items: vec!["item1".to_string(), "item2".to_string(), "item3".to_string()],
+            items: vec![
+                "item1".to_string(),
+                "item2".to_string(),
+                "item3".to_string(),
+            ],
         }
     }
 
@@ -314,11 +318,13 @@ mod tests {
         }
 
         let large_data = LargeData {
-            items: (0..1000).map(|i| TestData {
-                name: format!("item-{}", i),
-                value: i,
-                items: vec![format!("sub-{}", i); 10],
-            }).collect(),
+            items: (0..1000)
+                .map(|i| TestData {
+                    name: format!("item-{}", i),
+                    value: i,
+                    items: vec![format!("sub-{}", i); 10],
+                })
+                .collect(),
         };
 
         let temp_file = NamedTempFile::new().unwrap();

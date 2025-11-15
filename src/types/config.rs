@@ -488,8 +488,14 @@ fn migrate_minor_version(mut config: CliTestConfig) -> Result<CliTestConfig> {
     // Ensure global settings are properly initialized
     if config.global.env_vars.is_empty() {
         // Add default environment variables for consistent testing
-        config.global.env_vars.insert("LANG".to_string(), "en_US.UTF-8".to_string());
-        config.global.env_vars.insert("TZ".to_string(), "UTC".to_string());
+        config
+            .global
+            .env_vars
+            .insert("LANG".to_string(), "en_US.UTF-8".to_string());
+        config
+            .global
+            .env_vars
+            .insert("TZ".to_string(), "UTC".to_string());
     }
 
     log::debug!("Minor version migration completed");

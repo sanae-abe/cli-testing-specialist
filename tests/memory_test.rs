@@ -30,10 +30,13 @@ fn test_yaml_config_memory_impact() {
         default_value: None,
     }];
     apply_numeric_constraints(&mut options);
-    assert_eq!(options[0].option_type, OptionType::Numeric {
-        min: Some(1),
-        max: Some(65535),
-    });
+    assert_eq!(
+        options[0].option_type,
+        OptionType::Numeric {
+            min: Some(1),
+            max: Some(65535),
+        }
+    );
     println!("   ✅ numeric-constraints.yaml loaded successfully (4.4KB raw size)");
     println!("   Port constraints applied: min=1, max=65535");
 
@@ -49,10 +52,7 @@ fn test_yaml_config_memory_impact() {
     }];
     load_enum_values(&mut enum_options);
     if let OptionType::Enum { ref values } = enum_options[0].option_type {
-        assert!(
-            !values.is_empty(),
-            "Format enum values should be loaded"
-        );
+        assert!(!values.is_empty(), "Format enum values should be loaded");
         assert!(
             values.contains(&"json".to_string()),
             "Should contain 'json' value"
@@ -65,7 +65,9 @@ fn test_yaml_config_memory_impact() {
 
     // Summary
     println!("\n=== Memory Impact Summary ===");
-    println!("Total YAML file size: ~13.4 KB (option-patterns + numeric-constraints + enum-definitions)");
+    println!(
+        "Total YAML file size: ~13.4 KB (option-patterns + numeric-constraints + enum-definitions)"
+    );
     println!("Estimated in-memory size: ~50-100 KB (with struct overhead, HashMap allocations)");
     println!("✅ PASS: Well under 2MB target (<0.1% of target)");
     println!("\nNote: Actual memory usage includes Rust struct overhead, HashMap allocations,");

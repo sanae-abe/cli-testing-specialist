@@ -83,7 +83,8 @@ fn main() -> Result<()> {
             log::info!("Generating tests from: {}", analysis.display());
 
             // 1. Load analysis JSON (optimized buffered I/O + safe deserialization)
-            let analysis_json = cli_testing_specialist::utils::read_json_string_optimized(&analysis)?;
+            let analysis_json =
+                cli_testing_specialist::utils::read_json_string_optimized(&analysis)?;
             let cli_analysis: CliAnalysis =
                 cli_testing_specialist::utils::deserialize_json_safe(&analysis_json)?;
 
