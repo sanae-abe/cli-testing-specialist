@@ -9,6 +9,18 @@ use std::time::Duration;
 /// 1. File existence check
 /// 2. Executable permissions check (Unix)
 /// 3. Canonicalization (prevents path traversal)
+///
+/// # Examples
+///
+/// ```no_run
+/// use cli_testing_specialist::utils::validate_binary_path;
+/// use std::path::Path;
+///
+/// // Validate a system binary
+/// let binary = validate_binary_path(Path::new("/usr/bin/ls"))?;
+/// assert!(binary.is_absolute());
+/// # Ok::<(), cli_testing_specialist::error::CliTestError>(())
+/// ```
 pub fn validate_binary_path(path: &Path) -> Result<PathBuf> {
     // Check existence
     if !path.exists() {
@@ -46,6 +58,23 @@ pub fn validate_binary_path(path: &Path) -> Result<PathBuf> {
 /// - Output capture (stdout and stderr)
 /// - Graceful cleanup on timeout
 /// - Resource limits applied (Unix only)
+///
+/// # Examples
+///
+/// ```no_run
+/// use cli_testing_specialist::utils::execute_with_timeout;
+/// use std::path::Path;
+/// use std::time::Duration;
+///
+/// // Execute echo with 5 second timeout
+/// let output = execute_with_timeout(
+///     Path::new("/bin/echo"),
+///     &["hello", "world"],
+///     Duration::from_secs(5)
+/// )?;
+/// assert!(output.contains("hello"));
+/// # Ok::<(), cli_testing_specialist::error::CliTestError>(())
+/// ```
 pub fn execute_with_timeout(binary: &Path, args: &[&str], timeout: Duration) -> Result<String> {
     execute_with_timeout_and_limits(
         binary,

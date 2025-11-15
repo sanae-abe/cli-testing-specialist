@@ -8,6 +8,26 @@ use std::time::Duration;
 /// - File descriptors (prevents FD exhaustion)
 /// - Process count (prevents fork bombs)
 /// - Execution timeout (prevents infinite loops)
+///
+/// # Examples
+///
+/// ```
+/// use cli_testing_specialist::utils::ResourceLimits;
+/// use std::time::Duration;
+///
+/// // Use default limits (500MB, 1024 FDs, 100 procs, 300s timeout)
+/// let limits = ResourceLimits::default();
+/// assert_eq!(limits.max_memory_bytes, 500 * 1024 * 1024);
+///
+/// // Create custom limits
+/// let custom = ResourceLimits::new(
+///     100 * 1024 * 1024,  // 100MB
+///     512,                 // 512 FDs
+///     50,                  // 50 processes
+///     Duration::from_secs(60) // 1 minute
+/// );
+/// assert_eq!(custom.max_memory_bytes, 100 * 1024 * 1024);
+/// ```
 #[derive(Debug, Clone)]
 pub struct ResourceLimits {
     /// Maximum memory usage in bytes (default: 500MB)
