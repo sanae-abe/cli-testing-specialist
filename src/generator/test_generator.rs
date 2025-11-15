@@ -219,7 +219,13 @@ impl TestGenerator {
                 "\"$CLI_BINARY\" --invalid-option-xyz".to_string(),
             )
             .expect_nonzero_exit() // Accept exit 1 or 2 (framework-agnostic)
-            .with_assertion(Assertion::OutputContains("error".to_string()))
+            // Match common error message patterns across different CLIs:
+            // - error, Error (most CLIs)
+            // - unknown, unrecognized (curl, many CLIs)
+            // - invalid (common in validation errors)
+            .with_assertion(Assertion::OutputMatches(
+                "(error|Error|unknown|unrecognized|invalid)".to_string(),
+            ))
             .with_tag("error-handling".to_string()),
         );
 
