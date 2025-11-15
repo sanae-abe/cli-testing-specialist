@@ -1,4 +1,3 @@
-use cli_testing_specialist::types::CliAnalysis;
 use cli_testing_specialist::utils::io_optimized::{
     read_json_naive, read_json_optimized, write_json_naive, write_json_optimized,
 };
