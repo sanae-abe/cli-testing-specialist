@@ -51,6 +51,38 @@ impl CliParser {
     /// 4. Parse help output to extract options
     /// 5. Detect subcommands recursively
     /// 6. Build CliAnalysis structure
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use cli_testing_specialist::analyzer::CliParser;
+    /// use std::path::Path;
+    ///
+    /// let parser = CliParser::new();
+    /// let analysis = parser.analyze(Path::new("/usr/bin/curl"))?;
+    ///
+    /// println!("Binary: {}", analysis.binary_name);
+    /// println!("Version: {:?}", analysis.version);
+    /// println!("Options: {}", analysis.metadata.total_options);
+    /// println!("Subcommands: {}", analysis.subcommands.len());
+    /// # Ok::<(), cli_testing_specialist::error::CliTestError>(())
+    /// ```
+    ///
+    /// # With Custom Resource Limits
+    ///
+    /// ```no_run
+    /// use cli_testing_specialist::analyzer::CliParser;
+    /// use cli_testing_specialist::utils::ResourceLimits;
+    /// use std::path::Path;
+    ///
+    /// let limits = ResourceLimits::default()
+    ///     .with_timeout(60)        // 60 seconds timeout
+    ///     .with_memory_mb(1024);   // 1GB memory limit
+    ///
+    /// let parser = CliParser::with_limits(limits);
+    /// let analysis = parser.analyze(Path::new("/usr/bin/kubectl"))?;
+    /// # Ok::<(), cli_testing_specialist::error::CliTestError>(())
+    /// ```
     pub fn analyze(&self, binary_path: &Path) -> Result<CliAnalysis> {
         let start_time = Instant::now();
 

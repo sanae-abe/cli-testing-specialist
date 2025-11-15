@@ -46,6 +46,33 @@ impl TestGenerator {
     }
 
     /// Generate all test cases based on selected categories
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use cli_testing_specialist::analyzer::CliParser;
+    /// use cli_testing_specialist::generator::TestGenerator;
+    /// use cli_testing_specialist::types::TestCategory;
+    /// use std::path::Path;
+    ///
+    /// let parser = CliParser::new();
+    /// let analysis = parser.analyze(Path::new("/usr/bin/curl"))?;
+    ///
+    /// let generator = TestGenerator::new(
+    ///     analysis,
+    ///     vec![TestCategory::Basic, TestCategory::Security, TestCategory::Help]
+    /// );
+    ///
+    /// let tests = generator.generate()?;
+    /// println!("Generated {} test cases", tests.len());
+    ///
+    /// // Count tests by category
+    /// let basic_tests = tests.iter()
+    ///     .filter(|t| t.category == TestCategory::Basic)
+    ///     .count();
+    /// println!("Basic tests: {}", basic_tests);
+    /// # Ok::<(), cli_testing_specialist::error::CliTestError>(())
+    /// ```
     pub fn generate(&self) -> Result<Vec<TestCase>> {
         log::info!("Generating tests for {} categories", self.categories.len());
 
@@ -73,6 +100,31 @@ impl TestGenerator {
     }
 
     /// Generate tests in parallel using rayon
+    ///
+    /// Automatically chooses optimal parallelization strategy based on workload size.
+    /// For large CLI tools (10+ subcommands), this provides 2-3x speedup.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use cli_testing_specialist::analyzer::CliParser;
+    /// use cli_testing_specialist::generator::TestGenerator;
+    /// use cli_testing_specialist::types::TestCategory;
+    /// use std::path::Path;
+    ///
+    /// let parser = CliParser::new();
+    /// let analysis = parser.analyze(Path::new("/usr/bin/kubectl"))?;
+    ///
+    /// let generator = TestGenerator::new(
+    ///     analysis,
+    ///     vec![TestCategory::Basic, TestCategory::Security]
+    /// );
+    ///
+    /// // Use parallel generation for large CLI tools
+    /// let tests = generator.generate_parallel()?;
+    /// println!("Generated {} tests in parallel", tests.len());
+    /// # Ok::<(), cli_testing_specialist::error::CliTestError>(())
+    /// ```
     pub fn generate_parallel(&self) -> Result<Vec<TestCase>> {
         log::info!(
             "Generating tests in parallel for {} categories",

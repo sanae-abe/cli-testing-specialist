@@ -52,6 +52,18 @@ impl BatsExecutor {
     }
 
     /// Verify BATS is installed and available
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use cli_testing_specialist::runner::BatsExecutor;
+    ///
+    /// match BatsExecutor::verify_bats_installed() {
+    ///     Ok(version) => println!("BATS version: {}", version),
+    ///     Err(e) => eprintln!("BATS not installed: {}", e),
+    /// }
+    /// # Ok::<(), cli_testing_specialist::error::CliTestError>(())
+    /// ```
     pub fn verify_bats_installed() -> Result<String> {
         let output = Command::new("bats")
             .arg("--version")

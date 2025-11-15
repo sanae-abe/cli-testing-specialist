@@ -44,6 +44,34 @@ impl BatsWriter {
     }
 
     /// Write test cases to BATS files, organized by category
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use cli_testing_specialist::generator::{TestGenerator, BatsWriter};
+    /// use cli_testing_specialist::analyzer::CliParser;
+    /// use cli_testing_specialist::types::TestCategory;
+    /// use std::path::{Path, PathBuf};
+    ///
+    /// let parser = CliParser::new();
+    /// let analysis = parser.analyze(Path::new("/usr/bin/curl"))?;
+    ///
+    /// let generator = TestGenerator::new(
+    ///     analysis.clone(),
+    ///     vec![TestCategory::Basic, TestCategory::Security]
+    /// );
+    /// let tests = generator.generate()?;
+    ///
+    /// let writer = BatsWriter::new(
+    ///     PathBuf::from("tests"),
+    ///     analysis.binary_name.clone(),
+    ///     analysis.binary_path.clone()
+    /// )?;
+    ///
+    /// let bats_files = writer.write_tests(&tests)?;
+    /// println!("Generated {} BATS files", bats_files.len());
+    /// # Ok::<(), cli_testing_specialist::error::CliTestError>(())
+    /// ```
     pub fn write_tests(&self, test_cases: &[TestCase]) -> Result<Vec<PathBuf>> {
         log::info!("Writing {} test cases to BATS files", test_cases.len());
 
