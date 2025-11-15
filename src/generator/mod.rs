@@ -56,6 +56,7 @@ pub mod bats_writer;
 pub mod templates;
 pub mod test_generator;
 pub mod test_generator_trait;
+mod test_level_parallel;
 
 // Re-export commonly used types
 pub use assert_cmd_generator::AssertCmdGenerator;
@@ -63,3 +64,5 @@ pub use bats_writer::BatsWriter;
 pub use templates::TemplateEngine;
 pub use test_generator::TestGenerator;
 pub use test_generator_trait::TestGenerator as TestGeneratorTrait;
+// test_level_parallel module contains helper functions for future use
+// Currently used directly in test_generator.rs via rayon::par_iter()
