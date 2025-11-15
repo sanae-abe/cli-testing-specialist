@@ -247,10 +247,11 @@ mod tests {
     fn test_unix_limit_verification_with_getrlimit() {
         use libc::{getrlimit, rlimit, RLIMIT_AS, RLIMIT_NOFILE, RLIMIT_NPROC};
 
-        // Use very conservative values to maximize success rate
-        let target_memory = 10 * 1024 * 1024; // 10MB - extremely conservative
-        let target_fd = 128; // 128 FDs - minimal
-        let target_proc = 10; // 10 processes - minimal
+        // Use conservative but safe values to avoid stack overflow in CI
+        // 10MB was too small and caused "failed to allocate an alternative stack" errors
+        let target_memory = 100 * 1024 * 1024; // 100MB - safe for CI environments
+        let target_fd = 256; // 256 FDs - reasonable minimum
+        let target_proc = 50; // 50 processes - reasonable minimum
 
         let limits = ResourceLimits::new(
             target_memory,
@@ -408,15 +409,16 @@ mod tests {
     fn test_unix_all_three_setrlimit_calls_must_succeed() {
         use libc::{getrlimit, rlimit, RLIMIT_AS, RLIMIT_NOFILE, RLIMIT_NPROC};
 
-        // Use extremely conservative values
+        // Use conservative but safe values to avoid stack overflow in CI
+        // 5MB was too small and could cause "failed to allocate an alternative stack" errors
         let limits = ResourceLimits::new(
-            5 * 1024 * 1024, // 5MB
-            64,              // 64 FDs
-            5,               // 5 processes
+            100 * 1024 * 1024, // 100MB - safe for CI environments
+            256,               // 256 FDs - reasonable minimum
+            50,                // 50 processes - reasonable minimum
             Duration::from_secs(60),
         );
 
-        // Apply should succeed with these tiny limits
+        // Apply should succeed with these safe limits
         let result = limits.apply();
 
         // If any of the three setrlimit calls has its != mutated to ==,
