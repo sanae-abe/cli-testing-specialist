@@ -49,6 +49,7 @@ indicatif = "0.18"
 
 # System information
 hostname = "0.4"
+num_cpus = "1.16"
 
 # Process timeout
 wait-timeout = "0.2"

@@ -1,9 +1,11 @@
 // Utilities module - Helper functions and validators
 
+pub mod parallel;
 pub mod resource_limits;
 pub mod safe_deserialize;
 pub mod validator;
 
+pub use parallel::{choose_strategy, ParallelStrategy, Workload};
 pub use resource_limits::ResourceLimits;
 pub use safe_deserialize::{
     deserialize_json_safe, deserialize_json_safe_from_reader, deserialize_yaml_safe,

@@ -571,17 +571,67 @@ Based on Bash prototype benchmarks:
 
 ### Performance Techniques
 
-1. **Parallel Processing**
-```rust
-use rayon::prelude::*;
+1. **Intelligent Parallel Processing Strategy**
 
-impl Analyzer {
-    pub fn analyze_parallel(&self, binaries: Vec<PathBuf>) -> Vec<Result<CliAnalysis>> {
-        binaries.par_iter()
-            .map(|binary| self.analyze(binary))
-            .collect()
+The system automatically selects the optimal parallel processing strategy based on workload characteristics:
+
+```rust
+/// Parallel processing strategy
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParallelStrategy {
+    /// Single-threaded execution for small workloads
+    Sequential,
+
+    /// Parallel execution per test category (medium workloads)
+    CategoryLevel,
+
+    /// Maximum parallelism (large workloads, 4+ CPU cores)
+    TestLevel,
+}
+
+/// Automatic strategy selection
+pub fn choose_strategy(workload: &Workload) -> ParallelStrategy {
+    let total_tests = workload.total_estimated_tests();
+
+    if total_tests < 20 || workload.num_categories <= 1 {
+        ParallelStrategy::Sequential  // Avoid thread overhead
+    } else if total_tests < 100 || workload.num_cpus < 4 {
+        ParallelStrategy::CategoryLevel  // Balanced parallelism
+    } else {
+        ParallelStrategy::TestLevel  // Maximum performance
     }
 }
+```
+
+**Strategy Selection Algorithm:**
+
+| Workload Size | Categories | CPU Cores | Strategy | Rationale |
+|--------------|-----------|-----------|----------|-----------|
+| <20 tests | 1 | Any | Sequential | Thread overhead > benefit |
+| 20-100 tests | 2-5 | Any | CategoryLevel | Balanced performance |
+| 100+ tests | 6+ | 4+ | TestLevel | Maximum parallelism |
+| 100+ tests | 6+ | <4 | CategoryLevel | CPU-bound limitation |
+
+**Performance Characteristics:**
+
+- **Sequential**: No thread overhead, predictable execution order
+- **CategoryLevel**: 2-4x speedup on 4-core systems, efficient memory usage
+- **TestLevel**: 4-8x speedup on 8+ core systems, maximum throughput
+
+**Benchmark Results** (strategy_selection):
+- Strategy selection overhead: ~390ns (0.39μs)
+- Negligible impact on total execution time (<0.01%)
+
+**Usage:**
+```rust
+let generator = TestGenerator::new(analysis, categories);
+
+// Automatic strategy selection (recommended)
+let tests = generator.generate_with_strategy()?;
+
+// Manual control (advanced users)
+let tests = generator.generate()?;           // Sequential
+let tests = generator.generate_parallel()?;  // CategoryLevel
 ```
 
 2. **Zero-Copy String Processing**

@@ -276,8 +276,66 @@ fn bench_parallel(c: &mut Criterion) {
                     black_box(generator.generate_parallel())
                 });
             });
+
+            group.bench_function("generate_with_strategy", |b| {
+                b.iter(|| {
+                    let generator = TestGenerator::new(
+                        black_box(analysis.clone()),
+                        black_box(vec![TestCategory::Basic, TestCategory::Help]),
+                    );
+                    black_box(generator.generate_with_strategy())
+                });
+            });
         }
     }
+
+    group.finish();
+}
+
+/// Benchmark parallel strategy selection with different workload sizes
+fn bench_strategy_selection(c: &mut Criterion) {
+    use cli_testing_specialist::types::TestCategory;
+    use cli_testing_specialist::utils::{choose_strategy, Workload};
+
+    let mut group = c.benchmark_group("strategy_selection");
+
+    // Small workload (Sequential expected)
+    group.bench_function("small_workload", |b| {
+        let categories = vec![TestCategory::Basic];
+        b.iter(|| {
+            let workload = Workload::new(black_box(&categories), black_box(5), black_box(0));
+            black_box(choose_strategy(&workload))
+        });
+    });
+
+    // Medium workload (CategoryLevel expected)
+    group.bench_function("medium_workload", |b| {
+        let categories = vec![
+            TestCategory::Basic,
+            TestCategory::Security,
+            TestCategory::Help,
+        ];
+        b.iter(|| {
+            let workload = Workload::new(black_box(&categories), black_box(15), black_box(5));
+            black_box(choose_strategy(&workload))
+        });
+    });
+
+    // Large workload (TestLevel expected on 4+ CPUs)
+    group.bench_function("large_workload", |b| {
+        let categories = vec![
+            TestCategory::Basic,
+            TestCategory::Security,
+            TestCategory::Help,
+            TestCategory::Path,
+            TestCategory::InputValidation,
+            TestCategory::Performance,
+        ];
+        b.iter(|| {
+            let workload = Workload::new(black_box(&categories), black_box(30), black_box(50));
+            black_box(choose_strategy(&workload))
+        });
+    });
 
     group.finish();
 }
@@ -288,6 +346,7 @@ criterion_group!(
     bench_generate,
     bench_serialization,
     bench_end_to_end,
-    bench_parallel
+    bench_parallel,
+    bench_strategy_selection
 );
 criterion_main!(benches);

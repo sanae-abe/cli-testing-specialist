@@ -109,19 +109,15 @@ fn main() -> Result<()> {
 
             match format {
                 TestFormat::Bats => {
-                    // 3. Generate test cases (BATS) with config support
+                    // 3. Generate test cases (BATS) with config support and automatic strategy selection
                     let generator = TestGenerator::with_config(
                         cli_analysis.clone(),
                         selected_categories,
                         None, // Auto-detect .cli-test-config.yml
                     )?;
-                    let test_cases = if num_categories > 1 {
-                        // Use parallel generation for multiple categories
-                        log::info!("Using parallel test generation");
-                        generator.generate_parallel()?
-                    } else {
-                        generator.generate()?
-                    };
+
+                    // Use automatic strategy selection based on workload
+                    let test_cases = generator.generate_with_strategy()?;
 
                     log::info!("Generated {} test cases", test_cases.len());
 

@@ -5,6 +5,7 @@ use crate::types::{
     Assertion, CliAnalysis, CliOption, CliTestConfig, NoArgsBehavior, OptionType, TestCase,
     TestCategory, TestPriority,
 };
+use crate::utils::{choose_strategy, ParallelStrategy, Workload};
 use rayon::prelude::*;
 use std::path::Path;
 
@@ -98,6 +99,67 @@ impl TestGenerator {
 
         log::info!("Total tests generated (parallel): {}", all_tests.len());
         Ok(all_tests)
+    }
+
+    /// Generate tests with automatic strategy selection
+    ///
+    /// This is the recommended method for test generation. It automatically
+    /// chooses the optimal parallel processing strategy based on:
+    /// - Number of test categories
+    /// - CLI complexity (options and subcommands)
+    /// - Available CPU cores
+    ///
+    /// # Strategy Selection
+    ///
+    /// - **Sequential**: Small workloads (<20 tests, 1 category)
+    /// - **CategoryLevel**: Medium workloads (20-100 tests, multiple categories)
+    /// - **TestLevel**: Large workloads (100+ tests, 4+ CPU cores)
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let generator = TestGenerator::new(analysis, categories);
+    /// let tests = generator.generate_with_strategy()?;
+    /// ```
+    pub fn generate_with_strategy(&self) -> Result<Vec<TestCase>> {
+        // Create workload descriptor
+        let workload = Workload::new(
+            &self.categories,
+            self.analysis.global_options.len(),
+            self.analysis.subcommands.len(),
+        );
+
+        // Choose optimal strategy
+        let strategy = choose_strategy(&workload);
+
+        log::info!(
+            "Auto-selected strategy: {:?} (categories={}, global_options={}, subcommands={}, estimated_tests={})",
+            strategy,
+            workload.num_categories,
+            self.analysis.global_options.len(),
+            self.analysis.subcommands.len(),
+            workload.total_estimated_tests()
+        );
+
+        // Execute based on strategy
+        match strategy {
+            ParallelStrategy::Sequential => {
+                log::debug!("Using sequential generation");
+                self.generate()
+            }
+            ParallelStrategy::CategoryLevel => {
+                log::debug!("Using category-level parallel generation");
+                self.generate_parallel()
+            }
+            ParallelStrategy::TestLevel => {
+                log::debug!(
+                    "Using test-level parallel generation (fallback to category-level for now)"
+                );
+                // TODO: Implement fine-grained test-level parallelism in future version
+                // For now, use category-level parallelism as it's already efficient
+                self.generate_parallel()
+            }
+        }
     }
 
     /// Generate basic validation tests (help, version, exit codes)
