@@ -1,7 +1,7 @@
 [package]
 name = "cli-testing-specialist"
 version = "1.0.9"
-authors = ["Sanae Abe <sanae.abe@example.com>"]
+authors = ["Sanae Abe <sanae.a.sunny@gmail.com>"]
 edition = "2021"
 license = "MIT"
 description = "Comprehensive testing framework for CLI tools - automated analysis, test generation, and security validation"
