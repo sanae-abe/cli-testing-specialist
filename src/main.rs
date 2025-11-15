@@ -52,13 +52,10 @@ fn main() -> Result<()> {
                 analysis.subcommands.len()
             );
 
-            // 3. Serialize to JSON
-            let json_output = serde_json::to_string_pretty(&analysis)?;
-
-            // 4. Write to output file
+            // 3. Write analysis to JSON file (optimized buffered I/O)
             let output_path = output;
 
-            fs::write(&output_path, json_output)?;
+            cli_testing_specialist::utils::write_json_optimized(&analysis, &output_path)?;
 
             // 5. Success message
             println!("✓ Analysis complete: {}", output_path.display());
@@ -85,8 +82,8 @@ fn main() -> Result<()> {
         } => {
             log::info!("Generating tests from: {}", analysis.display());
 
-            // 1. Load analysis JSON (with safe deserialization)
-            let analysis_json = fs::read_to_string(&analysis)?;
+            // 1. Load analysis JSON (optimized buffered I/O + safe deserialization)
+            let analysis_json = cli_testing_specialist::utils::read_json_string_optimized(&analysis)?;
             let cli_analysis: CliAnalysis =
                 cli_testing_specialist::utils::deserialize_json_safe(&analysis_json)?;
 

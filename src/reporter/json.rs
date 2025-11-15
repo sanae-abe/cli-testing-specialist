@@ -1,6 +1,6 @@
 use crate::error::Result;
 use crate::types::TestReport;
-use std::fs;
+use crate::utils::{write_json_compact_optimized, write_json_optimized};
 use std::path::Path;
 
 /// JSON report generator
@@ -8,23 +8,21 @@ pub struct JsonReporter;
 
 impl JsonReporter {
     /// Generate JSON report from test results
+    ///
+    /// Uses optimized buffered I/O for improved performance on large reports.
     pub fn generate(report: &TestReport, output_path: &Path) -> Result<()> {
-        // Serialize to pretty JSON
-        let json = serde_json::to_string_pretty(report)?;
-
-        // Write to file
-        fs::write(output_path, json)?;
+        // Write using optimized buffered I/O (64KB buffer)
+        write_json_optimized(report, output_path)?;
 
         Ok(())
     }
 
     /// Generate compact JSON report (minified)
+    ///
+    /// Uses optimized buffered I/O for improved performance on large reports.
     pub fn generate_compact(report: &TestReport, output_path: &Path) -> Result<()> {
-        // Serialize to compact JSON
-        let json = serde_json::to_string(report)?;
-
-        // Write to file
-        fs::write(output_path, json)?;
+        // Write using optimized buffered I/O (64KB buffer)
+        write_json_compact_optimized(report, output_path)?;
 
         Ok(())
     }
@@ -35,6 +33,7 @@ mod tests {
     use super::*;
     use crate::types::{EnvironmentInfo, TestResult, TestStatus, TestSuite};
     use chrono::Utc;
+    use std::fs;
     use std::time::Duration;
     use tempfile::NamedTempFile;
 

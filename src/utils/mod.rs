@@ -1,10 +1,15 @@
 // Utilities module - Helper functions and validators
 
+pub mod io_optimized;
 pub mod parallel;
 pub mod resource_limits;
 pub mod safe_deserialize;
 pub mod validator;
 
+pub use io_optimized::{
+    read_json_optimized, read_json_string_optimized, write_json_compact_optimized,
+    write_json_optimized,
+};
 pub use parallel::{choose_strategy, ParallelStrategy, Workload};
 pub use resource_limits::ResourceLimits;
 pub use safe_deserialize::{
