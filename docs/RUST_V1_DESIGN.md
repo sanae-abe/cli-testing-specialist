@@ -1444,6 +1444,316 @@ fn migrate_minor_version(mut config: UserConfig) -> Result<UserConfig> {
 
 ---
 
+## Technical Debt Management
+
+### 技術的負債の定義と分類
+
+このプロジェクトでは、技術的負債を以下の3つのカテゴリーに分類します：
+
+#### 1. Intentional Debt（意図的な負債）
+
+**定義**: プロジェクトの制約（時間・リソース・優先度）を考慮し、意図的に選択した一時的な実装
+
+**特徴**:
+- 明確な理由と期限が文書化されている
+- トレードオフが意識的に評価されている
+- 将来のリファクタリング計画が存在する
+
+**例**:
+```rust
+// DEBT(intentional): Using Vec instead of HashSet for small option lists
+// Reason: Premature optimization - typical CLI has <20 options
+// Impact: O(n) search acceptable for n<100
+// Plan: Refactor if performance profiling shows bottleneck (v1.2.0+)
+// Created: 2025-01-10
+let options: Vec<String> = vec![];
+```
+
+**管理方針**:
+- 受け入れ基準: ビジネス価値 > 技術コスト
+- レビュー頻度: 毎MINOR版リリース時
+- 解消優先度: 中
+
+#### 2. Accidental Debt（偶発的な負債）
+
+**定義**: 設計・実装時の知識不足や誤解により意図せず導入された負債
+
+**特徴**:
+- 後から発見される設計上の問題
+- コードレビュー・テストで検出されなかった非効率性
+- 要件変更により不適切になった実装
+
+**例**:
+```rust
+// DEBT(accidental): Regex compiled on every call
+// Reason: Initially overlooked - regex should be lazy_static
+// Impact: 10-20% performance degradation on hot path
+// Plan: Refactor to use lazy_static! (v1.0.1 hotfix)
+// Detected: 2025-01-15
+fn parse_option(line: &str) -> Option<CliOption> {
+    let re = Regex::new(r"--(\w+)").unwrap();
+    // ...
+}
+```
+
+**管理方針**:
+- 発見時の対応: 即座にIssue作成・優先度評価
+- レビュー頻度: 毎週のコードレビュー
+- 解消優先度: 高（パフォーマンス影響大の場合）
+
+#### 3. Bit Rot（劣化による負債）
+
+**定義**: 時間経過・環境変化により陳腐化・非推奨化した実装
+
+**特徴**:
+- 依存ライブラリの非推奨化
+- セキュリティ脆弱性の発見
+- Rust言語仕様の変更（新エディション）
+- ベストプラクティスの進化
+
+**例**:
+```rust
+// DEBT(bit-rot): Using deprecated clap v2 API
+// Reason: clap v4 introduced builder pattern (2023-09)
+// Impact: Security updates停止リスク、新機能利用不可
+// Plan: Migrate to clap v4 (v1.1.0)
+// Detected: 2025-01-20
+use clap::{App, Arg};  // deprecated in clap v4
+```
+
+**管理方針**:
+- 監視: Dependabot alerts、cargo-audit（週次CI）
+- 対応期限: セキュリティ関連=1週間、その他=次MINOR版
+- 解消優先度: 最高（セキュリティ）/ 中（機能）
+
+---
+
+### `// DEBT:` マーカー規約
+
+#### コメント形式
+
+全ての技術的負債には以下の形式でコメントを付与：
+
+```rust
+// DEBT(category): [One-line description]
+// Reason: [Why this debt exists]
+// Impact: [Performance/maintainability/security impact]
+// Plan: [Refactoring plan with target version]
+// Created/Detected: YYYY-MM-DD
+[Code with debt]
+```
+
+**必須フィールド**:
+- `category`: intentional / accidental / bit-rot
+- One-line description: 40文字以内の簡潔な説明
+- `Reason`: 負債が存在する理由
+- `Impact`: ビジネス・技術への影響
+- `Plan`: 解消計画（バージョン・期限）
+- `Created/Detected`: 作成日または検出日
+
+#### 検索とトラッキング
+
+```bash
+# 全負債の検索
+rg "// DEBT\(" --type rust
+
+# カテゴリー別検索
+rg "// DEBT\(intentional\)" --type rust
+rg "// DEBT\(accidental\)" --type rust
+rg "// DEBT\(bit-rot\)" --type rust
+
+# 期限切れ負債の検出（手動スクリプト）
+# - Created/Detected日付が6ヶ月以上前
+# - Planで指定されたバージョンがリリース済み
+```
+
+---
+
+### 四半期レビュープロセス
+
+#### レビュースケジュール
+
+**頻度**: 3ヶ月ごと（各四半期末）
+
+**対象**:
+- 全 `// DEBT:` マーカー付きコード
+- Dependabot alerts（未解決）
+- `cargo audit` 警告
+
+**レビュー会議**:
+- 参加者: プロジェクトメンテナー全員
+- 所要時間: 2-3時間
+- 成果物: 負債解消ロードマップ更新
+
+#### レビュー手順
+
+**1. 負債インベントリ作成**
+
+```bash
+# 1. 全負債をリスト化
+rg "// DEBT\(" --type rust -A 5 > debt-inventory.txt
+
+# 2. カテゴリー別集計
+echo "=== Debt Summary ==="
+echo "Intentional: $(rg "// DEBT\(intentional\)" --type rust -c | paste -sd+ | bc)"
+echo "Accidental:  $(rg "// DEBT\(accidental\)" --type rust -c | paste -sd+ | bc)"
+echo "Bit Rot:     $(rg "// DEBT\(bit-rot\)" --type rust -c | paste -sd+ | bc)"
+```
+
+**2. 優先度評価**
+
+各負債に以下の基準でスコアリング（0-10点）:
+
+| 評価項目 | 配点 |
+|---------|------|
+| セキュリティ影響 | 0-4点 |
+| パフォーマンス影響 | 0-3点 |
+| 保守性影響 | 0-2点 |
+| 解消容易性（逆スコア） | 0-1点 |
+
+**優先度判定**:
+- 8-10点: Critical（即座に対応）
+- 5-7点: High（次MINOR版で対応）
+- 2-4点: Medium（次MAJOR版で対応）
+- 0-1点: Low（機会があれば対応）
+
+**3. ロードマップ更新**
+
+優先度に基づき、以下を更新：
+
+- `todos.md`: 次四半期の負債解消タスク追加
+- `CHANGELOG.md`: 解消予定の負債を "Upcoming" セクションに記載
+- GitHub Issues: 各負債にIssue作成（ラベル: `tech-debt`）
+
+**4. メトリクス記録**
+
+四半期ごとの進捗を記録：
+
+```markdown
+## Technical Debt Metrics (Q1 2025)
+
+- Total debt items: 12
+- Resolved this quarter: 5
+- New debt introduced: 2
+- Net reduction: 3 items
+
+Top resolved debts:
+1. [#123] Migrate to clap v4 (bit-rot)
+2. [#145] Optimize regex compilation (accidental)
+3. [#167] Refactor error handling (intentional)
+```
+
+---
+
+### 負債導入時のガイドライン
+
+#### 新規負債の作成ルール
+
+1. **コードレビュー必須**: 全 `// DEBT:` マーカーはPRレビューで承認
+2. **Issue作成**: 負債作成時にGitHub Issueを同時作成
+3. **期限設定**: `Plan` フィールドに具体的なバージョン/日付を記載
+4. **影響範囲明記**: `Impact` フィールドに定量的な影響を記載
+
+#### 許容される負債の基準
+
+以下の場合のみ、意図的な負債の導入を許可：
+
+- **リリース期限**: v1.0リリース直前の非Critical修正
+- **プロトタイピング**: 新機能の実験的実装（`// DEBT(intentional): Prototype`）
+- **段階的移行**: 大規模リファクタリングの段階実施
+- **外部依存**: サードパーティライブラリの制約による回避策
+
+#### 禁止される負債
+
+以下は即座に修正すべきであり、負債として残すことを禁止：
+
+- セキュリティ脆弱性（OWASP Top 10該当）
+- メモリリーク・リソースリーク
+- データ破損のリスク
+- パニック発生の可能性（unwrap乱用等）
+
+---
+
+### ツール統合
+
+#### CI/CDパイプライン統合
+
+```yaml
+# .github/workflows/tech-debt.yml
+name: Technical Debt Check
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # 毎週日曜 00:00 UTC
+  pull_request:
+
+jobs:
+  debt-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Count technical debt
+        run: |
+          DEBT_COUNT=$(rg "// DEBT\(" --type rust -c | paste -sd+ | bc)
+          echo "Total debt items: $DEBT_COUNT"
+
+          if [ $DEBT_COUNT -gt 50 ]; then
+            echo "::warning::Technical debt exceeds threshold (50 items)"
+          fi
+
+      - name: Check for overdue debt
+        run: |
+          # Created/Detected日付が6ヶ月以上前の負債を検出
+          # （実装は省略 - 日付パースと比較が必要）
+          echo "Checking for overdue debt..."
+```
+
+#### Pre-commit Hook
+
+```bash
+#!/bin/bash
+# scripts/git-hooks/pre-commit-debt-check
+
+# 新規 DEBT マーカーの検出
+NEW_DEBT=$(git diff --cached --diff-filter=A | grep "// DEBT(")
+
+if [ -n "$NEW_DEBT" ]; then
+  echo "⚠️  New technical debt detected:"
+  echo "$NEW_DEBT"
+  echo ""
+  echo "Please ensure:"
+  echo "1. DEBT comment follows the standard format"
+  echo "2. GitHub Issue created for tracking"
+  echo "3. PR description explains the reason"
+  echo ""
+  read -p "Continue commit? (y/n) " -n 1 -r
+  echo
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    exit 1
+  fi
+fi
+```
+
+---
+
+### まとめ
+
+**技術的負債管理の目標**:
+
+1. **可視化**: 全負債を `// DEBT:` マーカーで明示的に記録
+2. **分類**: 3カテゴリー（Intentional/Accidental/Bit Rot）で整理
+3. **定期レビュー**: 四半期ごとの優先度評価と解消計画
+4. **自動化**: CI/CD統合で負債の増加を監視
+5. **文化**: 負債を恥ではなく管理対象として受け入れる
+
+**長期目標（v2.0）**:
+- 負債項目数: 常時20項目以下を維持
+- 解消速度: 新規導入 ≤ 解消数（四半期ごと）
+- 陳腐化防止: Dependabot自動更新で Bit Rot を最小化
+
+---
+
 ## Open Questions
 
 1. **Parallel processing granularity**
