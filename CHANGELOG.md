@@ -265,17 +265,35 @@ as the Rust implementation offers:
 
 ## [Unreleased]
 
+### Added
+- **Documentation Enhancements** (2025-01-16):
+  - Comprehensive API documentation with examples in all public modules
+  - USAGE.md: 800+ lines covering workflows, use cases, troubleshooting, best practices
+  - CONTRIBUTING.md: 700+ lines with development setup, coding standards, PR process
+  - Enhanced rustdoc comments with practical examples across:
+    - `analyzer` module (CliParser, SubcommandDetector)
+    - `generator` module (TestGenerator, BatsWriter)
+    - `reporter` module (all 4 formats: Markdown, JSON, HTML, JUnit)
+    - `runner` module (BatsExecutor)
+    - `config` module (configuration loading)
+
+### Changed
+- **Documentation Quality**: All modules now have comprehensive usage examples
+- **API Documentation**: Verified with `cargo rustdoc -- -D warnings` (0 warnings)
+
 ### Planned for v1.1
 - Manual subcommand specification for non-standard help formats
 - Custom test template support
 - Test execution parallelization
 - CI/CD integration examples (GitHub Actions, GitLab CI)
 - Homebrew formula for easy installation
+- Crates.io release
 
 ---
 
 ## Version History
 
+- **Unreleased**: Documentation enhancements (API docs, USAGE.md, CONTRIBUTING.md)
 - **1.0.9** (2025-11-12): Execution-based inference (100% accuracy), HTML filter fix
 - **1.0.8** (2025-11-12): No-args assertion relaxation (93.3% success rate)
 - **1.0.7** (2025-11-12): Clippy warning fix, Git hooks setup
