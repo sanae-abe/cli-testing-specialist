@@ -14,8 +14,11 @@
 //! use cli_testing_specialist::config::load_config;
 //! use std::path::Path;
 //!
-//! let config = load_config(Path::new("config/option-patterns.yaml"))?;
-//! println!("Loaded {} pattern rules", config.patterns.len());
+//! // Load from specific path
+//! let config = load_config(Some(Path::new(".cli-test-config.yml")))?;
+//! if let Some(cfg) = config {
+//!     println!("Loaded configuration version: {}", cfg.version);
+//! }
 //! # Ok::<(), cli_testing_specialist::error::CliTestError>(())
 //! ```
 //!
@@ -25,8 +28,10 @@
 //! use cli_testing_specialist::config::{load_config, validate_config};
 //! use std::path::Path;
 //!
-//! let config = load_config(Path::new("config/option-patterns.yaml"))?;
-//! validate_config(&config)?; // Ensures no duplicate patterns, valid regex, etc.
+//! if let Some(config) = load_config(Some(Path::new(".cli-test-config.yml")))? {
+//!     validate_config(&config)?; // Ensures valid configuration
+//!     println!("Configuration validated successfully");
+//! }
 //! # Ok::<(), cli_testing_specialist::error::CliTestError>(())
 //! ```
 

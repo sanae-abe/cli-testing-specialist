@@ -74,10 +74,14 @@ impl CliParser {
     /// use cli_testing_specialist::analyzer::CliParser;
     /// use cli_testing_specialist::utils::ResourceLimits;
     /// use std::path::Path;
+    /// use std::time::Duration;
     ///
-    /// let limits = ResourceLimits::default()
-    ///     .with_timeout(60)        // 60 seconds timeout
-    ///     .with_memory_mb(1024);   // 1GB memory limit
+    /// let limits = ResourceLimits::new(
+    ///     1024 * 1024 * 1024, // 1GB memory
+    ///     1024,               // file descriptors
+    ///     100,                // max processes
+    ///     Duration::from_secs(60), // timeout
+    /// );
     ///
     /// let parser = CliParser::with_limits(limits);
     /// let analysis = parser.analyze(Path::new("/usr/bin/kubectl"))?;

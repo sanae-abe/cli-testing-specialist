@@ -13,21 +13,23 @@
 //!
 //! ```no_run
 //! use cli_testing_specialist::reporter::MarkdownReporter;
-//! use cli_testing_specialist::types::{TestReport, TestSuite, TestResult};
+//! use cli_testing_specialist::types::TestReport;
 //! use std::path::Path;
+//! use std::time::Duration;
+//! use chrono::Utc;
 //!
 //! let report = TestReport {
 //!     binary_name: "curl".to_string(),
-//!     test_suites: vec![],
-//!     total_tests: 42,
-//!     total_passed: 40,
-//!     total_failed: 2,
-//!     total_skipped: 0,
-//!     duration_secs: 5.2,
+//!     binary_version: Some("8.7.1".to_string()),
+//!     suites: vec![],
+//!     total_duration: Duration::from_secs(5),
+//!     started_at: Utc::now(),
+//!     finished_at: Utc::now(),
+//!     environment: Default::default(),
+//!     security_findings: vec![],
 //! };
 //!
-//! let reporter = MarkdownReporter::new();
-//! reporter.generate(&report, Path::new("report.md"))?;
+//! MarkdownReporter::generate(&report, Path::new("report.md"))?;
 //! # Ok::<(), cli_testing_specialist::error::CliTestError>(())
 //! ```
 //!
@@ -37,20 +39,23 @@
 //! use cli_testing_specialist::reporter::{MarkdownReporter, JsonReporter, HtmlReporter};
 //! use cli_testing_specialist::types::TestReport;
 //! use std::path::Path;
+//! use std::time::Duration;
+//! use chrono::Utc;
 //! # let report = TestReport {
 //! #     binary_name: "curl".to_string(),
-//! #     test_suites: vec![],
-//! #     total_tests: 0,
-//! #     total_passed: 0,
-//! #     total_failed: 0,
-//! #     total_skipped: 0,
-//! #     duration_secs: 0.0,
+//! #     binary_version: Some("8.7.1".to_string()),
+//! #     suites: vec![],
+//! #     total_duration: Duration::from_secs(0),
+//! #     started_at: Utc::now(),
+//! #     finished_at: Utc::now(),
+//! #     environment: Default::default(),
+//! #     security_findings: vec![],
 //! # };
 //!
 //! // Generate all formats
-//! MarkdownReporter::new().generate(&report, Path::new("report.md"))?;
-//! JsonReporter::new().generate(&report, Path::new("report.json"))?;
-//! HtmlReporter::new().generate(&report, Path::new("report.html"))?;
+//! MarkdownReporter::generate(&report, Path::new("report.md"))?;
+//! JsonReporter::generate(&report, Path::new("report.json"))?;
+//! HtmlReporter::generate(&report, Path::new("report.html"))?;
 //! # Ok::<(), cli_testing_specialist::error::CliTestError>(())
 //! ```
 

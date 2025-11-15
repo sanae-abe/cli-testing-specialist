@@ -14,17 +14,16 @@
 //!
 //! ```no_run
 //! use cli_testing_specialist::runner::BatsExecutor;
-//! use cli_testing_specialist::types::TestCategory;
 //! use std::path::Path;
 //!
-//! let executor = BatsExecutor::new(
-//!     Path::new("/path/to/tests"),
+//! let executor = BatsExecutor::with_timeout(
+//!     "curl".to_string(),
+//!     Some("8.7.1".to_string()),
 //!     300, // timeout in seconds
-//!     vec![TestCategory::Basic, TestCategory::Security],
 //! );
 //!
-//! let report = executor.run()?;
-//! println!("Tests passed: {}/{}", report.total_passed, report.total_tests);
+//! let report = executor.run_tests(Path::new("/path/to/tests"))?;
+//! println!("Tests passed: {}/{}", report.total_passed(), report.total_tests());
 //! # Ok::<(), cli_testing_specialist::error::CliTestError>(())
 //! ```
 //!
@@ -32,21 +31,19 @@
 //!
 //! ```no_run
 //! use cli_testing_specialist::runner::BatsExecutor;
-//! use cli_testing_specialist::types::TestCategory;
 //! use std::path::Path;
 //!
-//! // Run only security-related tests
-//! let executor = BatsExecutor::new(
-//!     Path::new("/path/to/tests"),
+//! // Skip resource-intensive tests
+//! let executor = BatsExecutor::with_timeout(
+//!     "kubectl".to_string(),
+//!     Some("1.28.0".to_string()),
 //!     300,
-//!     vec![
-//!         TestCategory::Security,
-//!         TestCategory::DirectoryTraversal,
-//!         TestCategory::InputValidation,
-//!     ],
-//! );
+//! ).with_skip_categories(vec![
+//!     "directory-traversal".to_string(),
+//!     "performance".to_string(),
+//! ]);
 //!
-//! let report = executor.run()?;
+//! let report = executor.run_tests(Path::new("/path/to/tests"))?;
 //! # Ok::<(), cli_testing_specialist::error::CliTestError>(())
 //! ```
 
