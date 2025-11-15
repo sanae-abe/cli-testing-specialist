@@ -1,0 +1,26 @@
+#!/bin/sh
+# Pre-commit hook: Auto-format Rust code with cargo fmt
+#
+# This hook automatically runs cargo fmt before each commit to ensure
+# consistent code formatting across the codebase.
+#
+# To install: Run `scripts/install-hooks.sh`
+
+set -e
+
+echo "🎨 Running cargo fmt..."
+
+# Format all Rust code
+if ! cargo fmt --all -- --check > /dev/null 2>&1; then
+    echo "   Formatting code..."
+    cargo fmt --all
+
+    # Stage formatted files
+    git add -u
+
+    echo "   ✓ Code formatted and staged"
+else
+    echo "   ✓ Code already formatted"
+fi
+
+exit 0

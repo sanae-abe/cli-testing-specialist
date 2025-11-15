@@ -97,6 +97,21 @@ cargo install --git https://github.com/sanae-abe/cli-testing-specialist
 cli-testing-specialist --version
 ```
 
+### For Development
+
+```bash
+# Clone repository
+git clone https://github.com/sanae-abe/cli-testing-specialist
+cd cli-testing-specialist
+
+# Install Git hooks (auto-format on commit)
+./scripts/install-hooks.sh
+
+# Build and test
+cargo build
+cargo test
+```
+
 ### Dependencies
 
 #### Required for Test Execution
