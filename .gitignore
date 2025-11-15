@@ -87,3 +87,6 @@ mutants.out
 mutants.out.old
 .mutants.json
 benchmark_results.txt
+
+# Benchmarks (temporary/experimental)
+benches/memory_benchmark.rs
