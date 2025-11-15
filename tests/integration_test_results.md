@@ -226,7 +226,26 @@ CLI Testing Specialist successfully tested 7 different CLI tools across multiple
 4. Generates comprehensive security tests
 5. Produces multi-format reports
 
+**Skipped Tools**:
+- **docker**: Low compatibility tool (see TARGET-TOOLS.md)
+  - Reason: Container management, state dependencies, complex protocols
+  - Recommendation: Use domain-specific testing frameworks (testcontainers)
+
+- **kubectl**: Low compatibility tool (see TARGET-TOOLS.md)
+  - Reason: Kubernetes cluster dependency, domain-specific commands
+  - Recommendation: Use Kubernetes-specific testing tools (kubectl-test, kuttl)
+
+**Rationale**:
+Both docker and kubectl are classified as "Low Compatibility" tools in TARGET-TOOLS.md because they:
+1. Require external services (Docker daemon, Kubernetes cluster)
+2. Have complex state dependencies
+3. Use domain-specific logic that doesn't fit standard CLI tests
+4. Are better suited for integration tests rather than CLI interface tests
+
+**Alternative Testing Approaches**:
+- docker: Use testcontainers or docker-compose for integration tests
+- kubectl: Use kuttl or kubectl-test for Kubernetes-specific testing
+
 **Next Steps**:
-- Test with docker (if available)
-- Test with kubectl (if available)
-- Document compatibility matrix in TARGET-TOOLS.md
+- Document comprehensive compatibility matrix in TARGET-TOOLS.md ✅
+- Consider adding "informational mode" for low-compatibility tools (v1.1.0)
