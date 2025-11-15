@@ -38,7 +38,7 @@ pub struct Subcommand {
     /// Options specific to this subcommand
     pub options: Vec<CliOption>,
 
-    /// Required positional arguments (e.g., <ID>, <FILE>)
+    /// Required positional arguments (e.g., `<ID>`, `<FILE>`)
     #[serde(default)]
     pub required_args: Vec<String>,
 

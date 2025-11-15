@@ -226,9 +226,9 @@ impl CliParser {
 
     /// Parse required positional arguments from help output
     ///
-    /// Looks for Usage line and extracts <ARG> patterns:
-    /// - "Usage: cmd [OPTIONS] <ID>" → ["ID"]
-    /// - "Usage: cmd <FILE> <OUTPUT>" → ["FILE", "OUTPUT"]
+    /// Looks for Usage line and extracts `<ARG>` patterns:
+    /// - "Usage: cmd \[OPTIONS\] `<ID>`" → \["ID"\]
+    /// - "Usage: cmd `<FILE>` `<OUTPUT>`" → \["FILE", "OUTPUT"\]
     pub fn parse_required_args(&self, help_output: &str) -> Vec<String> {
         lazy_static! {
             static ref USAGE_LINE: Regex = Regex::new(r"(?i)^\s*usage:\s+").unwrap();
