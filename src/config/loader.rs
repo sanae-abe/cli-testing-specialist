@@ -243,8 +243,8 @@ test_adjustments:
 
         assert!(config_exists());
 
-        // Restore original directory
-        std::env::set_current_dir(original_dir).unwrap();
+        // Restore original directory (ignore errors if directory no longer exists)
+        let _ = std::env::set_current_dir(original_dir);
     }
 
     #[test]
