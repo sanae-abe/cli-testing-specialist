@@ -1166,6 +1166,284 @@ fn generate_null_byte_test(binary: &Path) -> TestCase {
 
 ---
 
+## Versioning & Maintenance Policy
+
+### Semantic Versioning (SemVer)
+
+このプロジェクトは[Semantic Versioning 2.0.0](https://semver.org/)に従います。
+
+**バージョン番号の形式**: `MAJOR.MINOR.PATCH`
+
+#### MAJOR バージョン（破壊的変更）
+
+以下の場合にMAJORバージョンを上げます：
+
+1. **JSON出力フォーマットの破壊的変更**
+   - `CliAnalysis`構造体のフィールド削除・リネーム
+   - `TestReport`構造体の互換性のない変更
+   - 例: v1.x → v2.0（`metadata`フィールドの構造変更）
+
+2. **CLI引数の破壊的変更**
+   - 既存コマンドの削除
+   - 必須引数の追加
+   - フラグ動作の根本的変更
+   - 例: `--categories`のデフォルト値変更
+
+3. **BATS出力フォーマットの破壊的変更**
+   - 生成されるテストファイル構造の非互換変更
+   - テスト命名規則の大幅変更
+
+4. **最小サポートRustバージョンのメジャー更新**
+   - 例: Rust 1.70 → 1.80（破壊的機能使用時）
+
+#### MINOR バージョン（後方互換な機能追加）
+
+以下の場合にMINORバージョンを上げます：
+
+1. **新機能追加**
+   - 新しいテストカテゴリの追加
+   - 新しいレポート形式の追加
+   - 新しいCLIコマンドの追加
+   - 例: v1.0 → v1.1（`--format csv`追加）
+
+2. **JSON出力への後方互換なフィールド追加**
+   - 新しいメタデータフィールド
+   - オプショナルフィールドの追加
+   - 例: `CliAnalysis`に`framework_type: Option<String>`追加
+
+3. **非推奨化（Deprecation）**
+   - 機能の非推奨化マーク（削除は次のMAJOR）
+   - 警告メッセージの表示
+
+#### PATCH バージョン（バグ修正）
+
+以下の場合にPATCHバージョンを上げます：
+
+1. **バグ修正**
+   - 誤った動作の修正
+   - クラッシュ・パニックの修正
+   - メモリリーク修正
+
+2. **パフォーマンス改善**
+   - 最適化（動作変更なし）
+   - 内部実装の改善
+
+3. **ドキュメント修正**
+   - README、ドキュメントの誤字修正
+   - コードコメントの改善
+
+4. **依存関係の更新**
+   - セキュリティパッチ
+   - マイナー依存更新
+
+### 後方互換性保証
+
+#### 保証される互換性
+
+1. **JSON形式の読み込み互換性**
+   - 古いバージョンで生成された`cli-analysis.json`は新バージョンで読み込み可能
+   - フィールド追加は許可、削除・リネームは禁止（MAJOR変更時を除く）
+
+2. **CLI引数の互換性**
+   - 既存のコマンド・フラグは維持
+   - デフォルト値の変更は非推奨期間を設ける
+
+3. **BATS出力の互換性**
+   - 生成されるテストファイルは既存のBATSランナーで実行可能
+   - テスト構造の大幅変更はMAJOR変更
+
+#### 非保証（内部実装）
+
+1. **内部モジュール構造**
+   - `src/`以下の内部APIは変更可能
+   - 公開API（`lib.rs`）のみ互換性保証
+
+2. **YAML設定ファイル形式**
+   - `config/*.yaml`は内部実装として変更可能
+   - マイグレーション機能で対応
+
+3. **ログ出力フォーマット**
+   - デバッグログは変更可能
+   - 機械読み取り用出力（JSON等）は保証
+
+### 非推奨化ポリシー
+
+#### 非推奨化プロセス
+
+1. **警告期間**: 最低2つのMINORバージョン
+   - v1.5で非推奨化 → v1.6, v1.7で警告表示 → v2.0で削除
+
+2. **警告方法**:
+   ```rust
+   #[deprecated(since = "1.5.0", note = "Use new_function() instead")]
+   pub fn old_function() { ... }
+   ```
+
+3. **ユーザー通知**:
+   - CHANGELOGに明記
+   - `--help`出力に警告表示
+   - 実行時警告メッセージ
+
+#### 非推奨化例
+
+```rust
+// v1.5.0: 非推奨化
+#[deprecated(since = "1.5.0", note = "Use TestCategory::Security instead")]
+pub const SECURITY_TESTS: &str = "security";
+
+// v1.6.0, v1.7.0: 警告期間（機能は維持）
+// 実行時: "Warning: SECURITY_TESTS is deprecated, use TestCategory::Security"
+
+// v2.0.0: 削除
+// BREAKING CHANGE: Removed deprecated SECURITY_TESTS constant
+```
+
+### 設定ファイルマイグレーション
+
+#### ユーザー設定ファイル
+
+ユーザー固有の設定ファイル（`.cli-test-config.yml`）はバージョン管理対象：
+
+```yaml
+# .cli-test-config.yml
+version: "1.0"  # 設定ファイルのバージョン
+tool:
+  name: "my-cli"
+  # ... 設定内容
+```
+
+#### マイグレーション機能
+
+```rust
+/// User configuration with version tracking
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserConfig {
+    /// Configuration file version (SemVer)
+    pub version: String,
+
+    /// Tool-specific settings
+    pub tool: ToolConfig,
+
+    /// Test generation settings (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub test_settings: Option<TestSettings>,
+}
+
+/// Migrate configuration file to current version
+pub fn migrate_config(config_path: &Path) -> Result<UserConfig> {
+    let content = fs::read_to_string(config_path)?;
+    let mut config: UserConfig = serde_yaml::from_str(&content)?;
+
+    // Version detection
+    let config_version = Version::parse(&config.version)?;
+    let current_version = Version::parse(env!("CARGO_PKG_VERSION"))?;
+
+    if config_version.major < current_version.major {
+        // Major version migration
+        config = migrate_major_version(config, config_version.major)?;
+        log::warn!("Migrated config from v{} to v{}", config_version, current_version);
+    }
+
+    if config_version.minor < current_version.minor {
+        // Minor version migration (add new fields with defaults)
+        config = migrate_minor_version(config)?;
+    }
+
+    // Update version
+    config.version = current_version.to_string();
+
+    Ok(config)
+}
+
+/// Migrate from v1.x to v2.x
+fn migrate_major_version(mut config: UserConfig, from_major: u64) -> Result<UserConfig> {
+    match from_major {
+        1 => {
+            // Example: Rename field
+            // config.new_field = config.old_field.clone();
+            // config.old_field is removed in v2.0
+            Ok(config)
+        }
+        _ => Err(CliTestError::UnsupportedConfigVersion(from_major)),
+    }
+}
+
+/// Migrate minor version (add new fields with defaults)
+fn migrate_minor_version(mut config: UserConfig) -> Result<UserConfig> {
+    // Add new optional fields if missing
+    if config.test_settings.is_none() {
+        config.test_settings = Some(TestSettings::default());
+    }
+    Ok(config)
+}
+```
+
+#### マイグレーション戦略
+
+1. **自動検出**: 設定ファイル読み込み時にバージョンチェック
+2. **自動マイグレーション**: 可能な場合は自動変換
+3. **ユーザー通知**: マイグレーション実施時は警告表示
+4. **バックアップ**: マイグレーション前に`.bak`ファイル作成
+
+### リリースプロセス
+
+#### リリース前チェックリスト
+
+1. **コード品質**
+   - [ ] `cargo test` 全テスト合格
+   - [ ] `cargo clippy -- -D warnings` 警告ゼロ
+   - [ ] `cargo fmt --check` フォーマット確認
+
+2. **ドキュメント更新**
+   - [ ] CHANGELOG.md に変更内容記載
+   - [ ] README.md のバージョン番号更新
+   - [ ] API documentation (`cargo doc`)
+
+3. **後方互換性確認**
+   - [ ] 旧バージョンの`cli-analysis.json`で動作確認
+   - [ ] マイグレーションテスト実施
+
+4. **セキュリティ監査**
+   - [ ] `cargo audit` セキュリティスキャン
+   - [ ] 依存関係の脆弱性確認
+
+#### リリース手順
+
+1. **バージョンタグ作成**
+   ```bash
+   git tag -a v1.0.0 -m "Release v1.0.0"
+   git push origin v1.0.0
+   ```
+
+2. **crates.io 公開**
+   ```bash
+   cargo publish --dry-run
+   cargo publish
+   ```
+
+3. **GitHub Release 作成**
+   - バイナリアップロード
+   - CHANGELOGからリリースノート生成
+
+4. **Homebrew Formula 更新**
+   - SHA256ハッシュ更新
+   - バージョン番号更新
+
+### サポートポリシー
+
+#### Long-Term Support (LTS)
+
+- **MAJORバージョン**: 次のMAJORリリース後6ヶ月間セキュリティパッチ提供
+- **MINORバージョン**: 最新のみサポート
+- **PATCHバージョン**: 最新のみサポート
+
+#### セキュリティパッチ
+
+- セキュリティ脆弱性発見時は緊急PATCHリリース
+- サポート期間内の全MAJORバージョンにバックポート
+
+---
+
 ## Open Questions
 
 1. **Parallel processing granularity**
