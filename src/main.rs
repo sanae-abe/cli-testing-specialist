@@ -412,15 +412,41 @@ fn parse_categories(categories_str: &str, include_intensive: bool) -> Result<Vec
         let trimmed = part.trim();
         if !trimmed.is_empty() {
             let category = trimmed.parse::<TestCategory>().map_err(|_| {
-                cli_testing_specialist::error::Error::Config(format!(
-                    "Invalid test category: '{}'. Valid categories: {}",
+                // Find closest match using Levenshtein distance
+                let all_categories = TestCategory::all();
+                let suggestions = find_closest_matches(
                     trimmed,
-                    TestCategory::all()
+                    &all_categories
                         .iter()
                         .map(|c| c.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ))
+                        .collect::<Vec<_>>(),
+                    3,
+                );
+
+                let error_msg = if !suggestions.is_empty() {
+                    format!(
+                        "Invalid test category: '{}'. Did you mean: {}?\n\nValid categories: {}",
+                        trimmed,
+                        suggestions.join(", "),
+                        all_categories
+                            .iter()
+                            .map(|c| c.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                } else {
+                    format!(
+                        "Invalid test category: '{}'. Valid categories: {}",
+                        trimmed,
+                        all_categories
+                            .iter()
+                            .map(|c| c.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                };
+
+                cli_testing_specialist::error::Error::Config(error_msg)
             })?;
 
             // Filter out intensive tests if not explicitly included
@@ -443,4 +469,117 @@ fn parse_categories(categories_str: &str, include_intensive: bool) -> Result<Vec
     }
 
     Ok(categories)
+}
+
+/// Find closest matches using Levenshtein distance
+fn find_closest_matches(input: &str, candidates: &[&str], max_results: usize) -> Vec<String> {
+    let mut distances: Vec<(String, usize)> = candidates
+        .iter()
+        .map(|&candidate| {
+            let distance = levenshtein_distance(input, candidate);
+            (candidate.to_string(), distance)
+        })
+        .collect();
+
+    // Sort by distance (ascending)
+    distances.sort_by_key(|(_name, dist)| *dist);
+
+    // Return top matches with distance <= 3 (reasonable typo threshold)
+    distances
+        .into_iter()
+        .filter(|(_name, dist)| *dist <= 3)
+        .take(max_results)
+        .map(|(name, _dist)| name)
+        .collect()
+}
+
+/// Calculate Levenshtein distance between two strings
+fn levenshtein_distance(s1: &str, s2: &str) -> usize {
+    let len1 = s1.chars().count();
+    let len2 = s2.chars().count();
+
+    if len1 == 0 {
+        return len2;
+    }
+    if len2 == 0 {
+        return len1;
+    }
+
+    let s1_chars: Vec<char> = s1.chars().collect();
+    let s2_chars: Vec<char> = s2.chars().collect();
+
+    let mut prev_row: Vec<usize> = (0..=len2).collect();
+    let mut curr_row: Vec<usize> = vec![0; len2 + 1];
+
+    for i in 1..=len1 {
+        curr_row[0] = i;
+
+        for j in 1..=len2 {
+            let cost = if s1_chars[i - 1] == s2_chars[j - 1] {
+                0
+            } else {
+                1
+            };
+
+            curr_row[j] = (prev_row[j] + 1) // deletion
+                .min(curr_row[j - 1] + 1) // insertion
+                .min(prev_row[j - 1] + cost); // substitution
+        }
+
+        std::mem::swap(&mut prev_row, &mut curr_row);
+    }
+
+    prev_row[len2]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_levenshtein_distance() {
+        assert_eq!(levenshtein_distance("", ""), 0);
+        assert_eq!(levenshtein_distance("hello", "hello"), 0);
+        assert_eq!(levenshtein_distance("hello", "helo"), 1); // deletion
+        assert_eq!(levenshtein_distance("hello", "helllo"), 1); // insertion
+        assert_eq!(levenshtein_distance("hello", "hallo"), 1); // substitution
+        assert_eq!(levenshtein_distance("security", "secrity"), 1); // deletion
+        assert_eq!(levenshtein_distance("basic", "baisc"), 2); // transposition
+        assert_eq!(levenshtein_distance("performance", "perfomance"), 1); // deletion
+    }
+
+    #[test]
+    fn test_find_closest_matches() {
+        let candidates = vec!["basic", "security", "performance", "help"];
+
+        // Exact match (distance 0)
+        let matches = find_closest_matches("security", &candidates, 3);
+        assert_eq!(matches, vec!["security"]);
+
+        // 1 character typo
+        let matches = find_closest_matches("secrity", &candidates, 3);
+        assert_eq!(matches, vec!["security"]);
+
+        // 2 character typo
+        let matches = find_closest_matches("baisc", &candidates, 3);
+        assert_eq!(matches, vec!["basic"]);
+
+        // No close matches (distance > 3)
+        let matches = find_closest_matches("xyz", &candidates, 3);
+        assert_eq!(matches.len(), 0);
+
+        // Multiple close matches
+        let matches = find_closest_matches("perormance", &candidates, 3);
+        assert!(matches.contains(&"performance".to_string()));
+    }
+
+    #[test]
+    fn test_find_closest_matches_with_limit() {
+        let candidates = vec!["basic", "bats", "bash", "help"];
+
+        // Should return at most 2 matches
+        let matches = find_closest_matches("bas", &candidates, 2);
+        assert!(matches.len() <= 2);
+        assert!(matches.contains(&"basic".to_string()) || matches.contains(&"bats".to_string()));
+    }
 }
