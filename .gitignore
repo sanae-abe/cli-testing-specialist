@@ -86,3 +86,4 @@ mutants-out/
 mutants.out
 mutants.out.old
 .mutants.json
+benchmark_results.txt

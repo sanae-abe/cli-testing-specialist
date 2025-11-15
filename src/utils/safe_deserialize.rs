@@ -470,4 +470,343 @@ mod tests {
         // Should fail due to size limit
         assert!(result.is_err());
     }
+
+    // ========== Boundary Value Tests ==========
+
+    #[test]
+    fn test_json_size_exactly_at_limit() {
+        // Create JSON exactly at MAX_DESERIALIZE_SIZE (10MB)
+        // {"data":"xxx..."} where total is exactly MAX_DESERIALIZE_SIZE bytes
+        let data_size = MAX_DESERIALIZE_SIZE - 11; // Account for {"data":""} = 11 bytes
+        let json = format!(r#"{{"data":"{}"}}"#, "x".repeat(data_size));
+
+        assert_eq!(json.len(), MAX_DESERIALIZE_SIZE);
+
+        let result: Result<serde_json::Value> = deserialize_json_safe(&json);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_json_size_one_byte_over_limit() {
+        // Create JSON exactly MAX_DESERIALIZE_SIZE + 1 bytes
+        let data_size = MAX_DESERIALIZE_SIZE - 10; // {"data":""} = 10 bytes, +1 extra = +11 total
+        let json = format!(r#"{{"data":"{}"}}"#, "x".repeat(data_size));
+
+        assert_eq!(json.len(), MAX_DESERIALIZE_SIZE + 1);
+
+        let result: Result<serde_json::Value> = deserialize_json_safe(&json);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("JSON payload too large"));
+    }
+
+    #[test]
+    fn test_json_size_one_byte_under_limit() {
+        // Create JSON exactly MAX_DESERIALIZE_SIZE - 1 bytes
+        let data_size = MAX_DESERIALIZE_SIZE - 12; // Account for {"data":""} = 11 bytes
+        let json = format!(r#"{{"data":"{}"}}"#, "x".repeat(data_size));
+
+        assert_eq!(json.len(), MAX_DESERIALIZE_SIZE - 1);
+
+        let result: Result<serde_json::Value> = deserialize_json_safe(&json);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_yaml_size_exactly_at_limit() {
+        // Create YAML exactly at MAX_DESERIALIZE_SIZE
+        let data_size = MAX_DESERIALIZE_SIZE - 6; // "data: " = 6 bytes
+        let yaml = format!("data: {}", "x".repeat(data_size));
+
+        assert_eq!(yaml.len(), MAX_DESERIALIZE_SIZE);
+
+        let result: Result<serde_yaml::Value> = deserialize_yaml_safe(&yaml);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_yaml_size_one_byte_over_limit() {
+        // Create YAML exactly MAX_DESERIALIZE_SIZE + 1 bytes
+        let data_size = MAX_DESERIALIZE_SIZE - 5; // "data: " = 6 bytes, -1 = 5
+        let yaml = format!("data: {}", "x".repeat(data_size));
+
+        assert_eq!(yaml.len(), MAX_DESERIALIZE_SIZE + 1);
+
+        let result: Result<serde_yaml::Value> = deserialize_yaml_safe(&yaml);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("YAML payload too large"));
+    }
+
+    // ========== Exact Recursion Depth Tests ==========
+
+    #[test]
+    fn test_json_depth_exactly_16_levels() {
+        // Create JSON with exactly 16 levels (at the limit)
+        // Start with a leaf value (depth 1), then nest 15 times
+        let mut nested_json = String::from(r#""value""#); // Leaf value = depth 1
+        for i in 0..15 {
+            nested_json = format!(r#"{{"level{}":{}}}"#, i, nested_json);
+        }
+
+        let result: Result<serde_json::Value> = deserialize_json_safe(&nested_json);
+        let value = result.expect("16 levels should be allowed");
+        assert_eq!(calculate_json_depth(&value), 16);
+    }
+
+    #[test]
+    fn test_json_depth_exactly_17_levels() {
+        // Create JSON with exactly 17 levels (exceeds limit by 1)
+        let mut nested_json = String::from(r#""value""#); // Leaf value = depth 1
+        for i in 0..16 {
+            nested_json = format!(r#"{{"level{}":{}}}"#, i, nested_json);
+        }
+
+        let result: Result<serde_json::Value> = deserialize_json_safe(&nested_json);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("17 levels") || err_msg.contains("depth too deep"));
+    }
+
+    #[test]
+    fn test_yaml_depth_exactly_16_levels() {
+        // Create YAML with exactly 16 levels
+        // Start with a string value, then nest 15 times
+        let mut nested_yaml = String::from("value"); // Leaf value = depth 1
+        for i in 0..15 {
+            nested_yaml = format!("level{}:\n  {}", i, nested_yaml.replace('\n', "\n  "));
+        }
+
+        let result: Result<serde_yaml::Value> = deserialize_yaml_safe(&nested_yaml);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_yaml_depth_exactly_17_levels() {
+        // Create YAML with exactly 17 levels (exceeds limit by 1)
+        let mut nested_yaml = String::from("value"); // Leaf value = depth 1
+        for i in 0..16 {
+            nested_yaml = format!("level{}:\n  {}", i, nested_yaml.replace('\n', "\n  "));
+        }
+
+        let result: Result<serde_yaml::Value> = deserialize_yaml_safe(&nested_yaml);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("depth too deep"));
+    }
+
+    // ========== Arithmetic Operator Mutation Tests ==========
+
+    #[test]
+    fn test_json_reader_size_arithmetic_plus() {
+        // Test that MAX_DESERIALIZE_SIZE + 1 is used correctly in take()
+        // If mutated to *, the limit would be much larger
+        // Use valid JSON that's exactly at the size limit
+        let data_size = MAX_DESERIALIZE_SIZE - 11; // Account for {"data":""}
+        let exact_limit_json = format!(r#"{{"data":"{}"}}"#, "x".repeat(data_size));
+        let reader = exact_limit_json.as_bytes();
+
+        let result: Result<serde_json::Value> = deserialize_json_safe_from_reader(reader);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_yaml_reader_size_arithmetic_plus() {
+        // Test that MAX_DESERIALIZE_SIZE + 1 is used correctly in take()
+        // Use valid YAML that's exactly at the size limit
+        let data_size = MAX_DESERIALIZE_SIZE - 6; // Account for "data: "
+        let exact_limit_yaml = format!("data: {}", "x".repeat(data_size));
+        let reader = exact_limit_yaml.as_bytes();
+
+        let result: Result<serde_yaml::Value> = deserialize_yaml_safe_from_reader(reader);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_depth_calculation_arithmetic() {
+        // Test that depth calculation uses + correctly (1 + max depth)
+        // If mutated to *, depth would be incorrectly calculated
+        let json = serde_json::json!({
+            "a": {
+                "b": {
+                    "c": "value"
+                }
+            }
+        });
+
+        let depth = calculate_json_depth(&json);
+        assert_eq!(depth, 4); // Verify correct arithmetic: 1 + 1 + 1 + 1
+    }
+
+    // ========== Comparison Operator Mutation Tests ==========
+
+    #[test]
+    fn test_json_size_comparison_greater_than() {
+        // Test that > is used correctly (not >= or ==)
+        // Size exactly at limit should succeed (using valid JSON)
+        let data_size = MAX_DESERIALIZE_SIZE - 11; // Account for {"data":""}
+        let json_at_limit = format!(r#"{{"data":"{}"}}"#, "x".repeat(data_size));
+        assert_eq!(json_at_limit.len(), MAX_DESERIALIZE_SIZE);
+
+        let result: Result<serde_json::Value> = deserialize_json_safe(&json_at_limit);
+        assert!(result.is_ok(), "Size at limit should succeed");
+
+        // Size over limit should fail
+        let data_size_over = MAX_DESERIALIZE_SIZE - 10;
+        let json_over_limit = format!(r#"{{"data":"{}"}}"#, "x".repeat(data_size_over));
+        assert_eq!(json_over_limit.len(), MAX_DESERIALIZE_SIZE + 1);
+
+        let result: Result<serde_json::Value> = deserialize_json_safe(&json_over_limit);
+        assert!(result.is_err(), "Size over limit should fail");
+    }
+
+    #[test]
+    fn test_json_depth_comparison_greater_than() {
+        // Test that > is used correctly for depth check (not >= or ==)
+        // Depth exactly at limit (16) should succeed
+        let mut at_limit = String::from(r#"1"#); // Start with depth 1
+        for _ in 0..15 {
+            at_limit = format!(r#"{{"n":{}}}"#, at_limit);
+        }
+
+        let result: Result<serde_json::Value> = deserialize_json_safe(&at_limit);
+        assert!(result.is_ok(), "Depth at limit should succeed");
+
+        // Depth over limit (17) should fail
+        let mut over_limit = String::from(r#"1"#); // Start with depth 1
+        for _ in 0..16 {
+            over_limit = format!(r#"{{"n":{}}}"#, over_limit);
+        }
+
+        let result: Result<serde_json::Value> = deserialize_json_safe(&over_limit);
+        assert!(result.is_err(), "Depth over limit should fail");
+    }
+
+    #[test]
+    fn test_reader_buffer_length_comparison() {
+        // Test that buffer.len() > MAX_DESERIALIZE_SIZE is checked correctly
+        // Exactly at limit should succeed (using valid JSON)
+        let data_size = MAX_DESERIALIZE_SIZE - 11;
+        let at_limit = format!(r#"{{"data":"{}"}}"#, "x".repeat(data_size));
+        let result: Result<serde_json::Value> =
+            deserialize_json_safe_from_reader(at_limit.as_bytes());
+        assert!(result.is_ok());
+
+        // Over limit should fail
+        let data_size_over = MAX_DESERIALIZE_SIZE - 10;
+        let over_limit = format!(r#"{{"data":"{}"}}"#, "x".repeat(data_size_over));
+        let result: Result<serde_json::Value> =
+            deserialize_json_safe_from_reader(over_limit.as_bytes());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("too large"));
+    }
+
+    // ========== Constant Value Verification Tests ==========
+
+    #[test]
+    fn test_max_deserialize_size_constant_value() {
+        // Test that MAX_DESERIALIZE_SIZE is exactly 10MB (10 * 1024 * 1024)
+        // If mutated to use + instead of *, the value would be incorrect
+        assert_eq!(MAX_DESERIALIZE_SIZE, 10485760); // 10 * 1024 * 1024 = 10485760
+
+        // Verify it's not 10 + 1024 * 1024 = 1048586
+        assert_ne!(MAX_DESERIALIZE_SIZE, 1048586);
+
+        // Verify it's not 10 * 1024 + 1024 = 11264
+        assert_ne!(MAX_DESERIALIZE_SIZE, 11264);
+    }
+
+    #[test]
+    fn test_max_deserialize_size_boundary_enforcement() {
+        // Test that the exact 10MB limit is enforced
+        // This verifies the constant is calculated correctly with multiplication
+
+        // Create data exactly 10MB - should succeed
+        let exact_10mb_data = "x".repeat(MAX_DESERIALIZE_SIZE - 11);
+        let json_10mb = format!(r#"{{"data":"{}"}}"#, exact_10mb_data);
+        assert_eq!(json_10mb.len(), 10485760); // Exactly 10 * 1024 * 1024
+
+        let result: Result<serde_json::Value> = deserialize_json_safe(&json_10mb);
+        assert!(result.is_ok(), "10MB exact should be accepted");
+
+        // Create data 10MB + 1 byte - should fail
+        let over_10mb_data = "x".repeat(MAX_DESERIALIZE_SIZE - 10);
+        let json_over_10mb = format!(r#"{{"data":"{}"}}"#, over_10mb_data);
+        assert_eq!(json_over_10mb.len(), 10485761); // 10MB + 1
+
+        let result: Result<serde_json::Value> = deserialize_json_safe(&json_over_10mb);
+        assert!(result.is_err(), "10MB + 1 should be rejected");
+    }
+
+    // ========== YAML Reader Arithmetic Tests ==========
+
+    #[test]
+    fn test_yaml_reader_take_plus_one() {
+        // Test that reader.take(MAX_DESERIALIZE_SIZE + 1) works correctly
+        // This allows reading exactly MAX_DESERIALIZE_SIZE bytes to detect overflow
+
+        // Create YAML exactly at MAX_DESERIALIZE_SIZE - should succeed
+        let data_size = MAX_DESERIALIZE_SIZE - 6;
+        let exact_limit_yaml = format!("data: {}", "x".repeat(data_size));
+        assert_eq!(exact_limit_yaml.len(), MAX_DESERIALIZE_SIZE);
+
+        let result: Result<serde_yaml::Value> =
+            deserialize_yaml_safe_from_reader(exact_limit_yaml.as_bytes());
+        assert!(
+            result.is_ok(),
+            "Exactly MAX_DESERIALIZE_SIZE should succeed"
+        );
+
+        // Create YAML exactly MAX_DESERIALIZE_SIZE + 1 - should fail
+        let data_size_over = MAX_DESERIALIZE_SIZE - 5;
+        let over_limit_yaml = format!("data: {}", "x".repeat(data_size_over));
+        assert_eq!(over_limit_yaml.len(), MAX_DESERIALIZE_SIZE + 1);
+
+        let result: Result<serde_yaml::Value> =
+            deserialize_yaml_safe_from_reader(over_limit_yaml.as_bytes());
+        assert!(result.is_err(), "MAX_DESERIALIZE_SIZE + 1 should fail");
+        assert!(result.unwrap_err().to_string().contains("too large"));
+    }
+
+    #[test]
+    fn test_yaml_reader_buffer_overflow_detection() {
+        // Test that the +1 in take() is necessary to detect overflow
+        // If mutated to * or -, overflow detection would fail
+
+        // Create a YAML payload that's exactly MAX_DESERIALIZE_SIZE + 1 bytes
+        // This should be caught by the buffer length check
+        let oversized_data = "x".repeat(MAX_DESERIALIZE_SIZE + 1);
+        let reader = oversized_data.as_bytes();
+
+        let result: Result<serde_yaml::Value> = deserialize_yaml_safe_from_reader(reader);
+
+        // Should fail with "too large" error, not a parsing error
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("too large") || err_msg.contains("Invalid UTF-8"),
+            "Should detect size overflow, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_json_reader_buffer_overflow_detection() {
+        // Same test for JSON reader to ensure consistent behavior
+        let oversized_data = "x".repeat(MAX_DESERIALIZE_SIZE + 1);
+        let reader = oversized_data.as_bytes();
+
+        let result: Result<serde_json::Value> = deserialize_json_safe_from_reader(reader);
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("too large") || err_msg.contains("Invalid UTF-8"),
+            "Should detect size overflow, got: {}",
+            err_msg
+        );
+    }
 }

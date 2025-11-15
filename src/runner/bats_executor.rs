@@ -280,6 +280,7 @@ impl BatsExecutor {
                         Command::new("bats")
                             .arg("--formatter")
                             .arg("tap")
+                            .arg("--verbose-run")
                             .arg(&bats_file_path)
                             .stdout(Stdio::piped())
                             .stderr(Stdio::piped())
