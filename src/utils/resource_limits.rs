@@ -370,6 +370,10 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    #[cfg_attr(
+        all(target_os = "linux", not(target_env = "musl")),
+        ignore = "Actual setrlimit calls affect process limits in CI"
+    )]
     fn test_unix_setrlimit_error_detection() {
         use libc::{getrlimit, rlimit, RLIMIT_AS};
 
