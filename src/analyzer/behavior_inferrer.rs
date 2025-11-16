@@ -154,8 +154,8 @@ impl BehaviorInferrer {
     /// Check if Usage pattern indicates subcommand requirement
     ///
     /// Patterns that indicate RequireSubcommand:
-    /// - "Usage: cmd <SUBCOMMAND>"
-    /// - "Usage: cmd <COMMAND>"
+    /// - "Usage: cmd \<SUBCOMMAND\>"
+    /// - "Usage: cmd \<COMMAND\>"
     /// - "Usage: cmd COMMAND"
     fn requires_subcommand_from_usage(&self, pattern: &str) -> bool {
         let pattern_lower = pattern.to_lowercase();
@@ -179,8 +179,8 @@ impl BehaviorInferrer {
     /// Check if Usage pattern indicates optional-only (ShowHelp)
     ///
     /// Patterns that indicate ShowHelp:
-    /// - "Usage: cmd [OPTIONS]"
-    /// - "Usage: cmd [options]"
+    /// - "Usage: cmd \[OPTIONS\]"
+    /// - "Usage: cmd \[options\]"
     /// - Everything in brackets
     fn is_optional_only_from_usage(&self, pattern: &str) -> bool {
         // Remove the binary name from pattern
