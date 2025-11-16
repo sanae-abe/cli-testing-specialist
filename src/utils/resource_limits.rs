@@ -244,6 +244,10 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    #[cfg_attr(
+        all(target_os = "linux", not(target_env = "musl")),
+        ignore = "Actual setrlimit calls affect process limits in CI"
+    )]
     fn test_unix_limit_verification_with_getrlimit() {
         use libc::{getrlimit, rlimit, RLIMIT_AS, RLIMIT_NOFILE, RLIMIT_NPROC};
 
@@ -406,6 +410,10 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    #[cfg_attr(
+        all(target_os = "linux", not(target_env = "musl")),
+        ignore = "Actual setrlimit calls affect process limits in CI"
+    )]
     fn test_unix_all_three_setrlimit_calls_must_succeed() {
         use libc::{getrlimit, rlimit, RLIMIT_AS, RLIMIT_NOFILE, RLIMIT_NPROC};
 
