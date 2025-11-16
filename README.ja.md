@@ -7,8 +7,8 @@
 [![License: MIT](https://img.shields.io/crates/l/cli-testing-specialist)](LICENSE)
 [![Docs.rs](https://docs.rs/cli-testing-specialist/badge.svg)](https://docs.rs/cli-testing-specialist)
 
-**バージョン**: 1.0.9
-**最終更新**: 2025-11-12
+**バージョン**: 1.0.10
+**最終更新**: 2025-11-16
 **ステータス**: 本番環境対応
 **ライセンス**: MIT
 
@@ -540,6 +540,26 @@ MITライセンス - 詳細は[LICENSE](LICENSE)ファイルを参照してく�
 ---
 
 ## 変更履歴
+
+### v1.0.10 (2025-11-16) - CI/CDインフラ修正 🔧
+
+**CI/CD改善**:
+- **setrlimitテスト分離**: Linux CI環境で5つのsetrlimit関連テストを無視
+  - テストがプロセス全体のメモリ制限（100MB）を設定し、並列テストに影響
+  - Code Coverageでの「failed to allocate an alternative stack」エラーを防止
+  - ローカル開発およびmacOS/Windows環境では引き続きテスト実行
+- **マルチシェルテスト対応**: Ubuntu CI環境にzshインストールを追加
+  - 不足していたzshパッケージのインストールで2/3から3/3の成功率に改善
+  - すべてのマルチシェルテスト（bash/zsh/sh）が正常に通過
+
+**Windowsプラットフォーム**:
+- Job Object対応のため`Win32_System_Threading`機能を追加
+
+**ドキュメント**:
+- rustdocサンプルとHTMLタグエスケープを修正
+- 作者メールアドレスを実際のアドレスに更新
+
+**すべてのCI/CDパイプラインが正常に通過** ✅
 
 ### v1.0.9 (2025-11-12) - 実行ベース推定 🎯
 

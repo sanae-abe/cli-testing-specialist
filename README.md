@@ -7,8 +7,8 @@
 [![License: MIT](https://img.shields.io/crates/l/cli-testing-specialist)](LICENSE)
 [![Docs.rs](https://docs.rs/cli-testing-specialist/badge.svg)](https://docs.rs/cli-testing-specialist)
 
-**Version**: 1.0.9
-**Last Updated**: 2025-11-12
+**Version**: 1.0.10
+**Last Updated**: 2025-11-16
 **Status**: Production Ready
 **License**: MIT
 
@@ -620,6 +620,26 @@ For major changes, please open an issue first to discuss the proposed changes.
 ---
 
 ## Changelog
+
+### v1.0.10 (2025-11-16) - CI/CD Infrastructure Fixes 🔧
+
+**CI/CD Improvements**:
+- **setrlimit Test Isolation**: Ignored 5 setrlimit-related tests in Linux CI environments
+  - Tests were setting process-wide memory limits (100MB) affecting parallel tests
+  - Prevented "failed to allocate an alternative stack" errors in Code Coverage
+  - Tests still run in local development and macOS/Windows environments
+- **Multi-Shell Test Support**: Added zsh installation to Ubuntu CI environments
+  - Fixed 2/3 test pass rate to 3/3 by installing missing zsh package
+  - All multi-shell tests (bash/zsh/sh) now pass successfully
+
+**Windows Platform**:
+- Added `Win32_System_Threading` feature for Job Object support
+
+**Documentation**:
+- Fixed rustdoc examples and HTML tag escaping
+- Updated author email to real address
+
+**All CI/CD pipelines now passing successfully** ✅
 
 ### v1.0.9 (2025-11-12) - Execution-based Inference 🎯
 
