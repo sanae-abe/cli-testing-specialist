@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.10] - 2025-11-16
+
+### Fixed
+
+#### CI/CD Infrastructure
+- **setrlimit Test Isolation**: Ignored 5 setrlimit-related tests in Linux CI environments to prevent memory exhaustion during parallel test execution
+  - Tests were setting process-wide memory limits (100MB) that affected other parallel tests
+  - Prevented "failed to allocate an alternative stack" errors in Code Coverage and test runs
+  - Tests still run in local development and macOS/Windows environments
+- **Multi-Shell Test Support**: Added zsh installation to Ubuntu CI environments
+  - Enabled all 3 multi-shell tests (bash/zsh/sh) to pass in Test and Publish Reports workflow
+  - Fixed 2/3 test pass rate to 3/3 by installing missing zsh package
+
+#### Windows Platform
+- **Job Object Support**: Added `Win32_System_Threading` feature to enable Windows Job Objects for resource limiting
+
+#### Documentation
+- **API Documentation**: Fixed rustdoc examples to match current API signatures
+- **HTML Tag Escaping**: Properly escaped HTML tags in rustdoc comments
+
+### Changed
+- **Author Contact**: Updated author email to real address for better communication
+
 ## [1.0.0] - 2025-11-11
 
 ### Added - Complete Rust v1.0 Implementation
