@@ -231,6 +231,10 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    #[cfg_attr(
+        all(target_os = "linux", not(target_env = "musl")),
+        ignore = "Actual setrlimit calls affect process limits in CI"
+    )]
     fn test_apply_limits_unix() {
         // Note: This test may fail if the process doesn't have permission
         // to set resource limits. It's primarily for compilation checking.
